@@ -155,6 +155,13 @@ def app_route():
         headers={"Cache-Control": "no-store, must-revalidate"})
 
 
+@app.get("/privacy")
+def privacy():
+    return FileResponse(
+        os.path.join(os.path.dirname(__file__), "static", "privacy.html"),
+        headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/healthz")
 def health():
     return {"status": "ok"}
