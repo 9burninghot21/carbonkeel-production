@@ -141,6 +141,13 @@ def _unsupported(raw):
 
 @app.get("/")
 def index():
+    return FileResponse(
+        os.path.join(os.path.dirname(__file__), "..", "site", "index.html"),
+        headers={"Cache-Control": "no-store, must-revalidate"})
+
+
+@app.get("/app")
+def app_route():
     # no-store: the single-page app is edited live during demos/development;
     # a cached shell silently hides new features and breaks calls.
     return FileResponse(
