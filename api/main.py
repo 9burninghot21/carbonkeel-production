@@ -1,23 +1,25 @@
 """CarbonKeel API — free-lookup funnel + owner-data scoring.
 
 Run:  python -m uvicorn api.main:app --reload   (from repo root)
-Then open http://127.0.0.1:8000
+Then open http://127.0.0.1:8000  (landing page; the app is at /app)
 
 Endpoints:
   GET  /api/search?q=NAME        find ships in the public THETIS-MRV export
   GET  /api/lookup/{imo}?dwt=N   ESTIMATE scorecard from public data
+  POST /api/calc                 owner-data CII + carbon bill from the operator's own figures
   POST /api/score                full scorecard from owner-supplied activity
+  GET  /report/ship/{imo}        printable single-ship report (save as PDF); .csv for a spreadsheet
 """
-import glob
 import os
 import sys
 import threading
 from dataclasses import asdict
+from datetime import date
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -29,9 +31,15 @@ from ghgcore.fueleu import compute_fueleu
 from ghgcore.euets import compute_ets
 from ghgcore.ukets import compute_ukets
 from ghgcore.nzf import compute_nzf
+from ghgcore.whatif import apply_whatif
+from ghgcore.assumptions import (DEFAULT_EUA_PRICE_EUR, DEFAULT_UKA_PRICE_GBP, DEFAULT_EUR_PER_GBP,
+                                 DEFAULT_POOL_PRICE_EUR_PER_TCO2E, assumptions_block)
 from ghgcore import privacy
 
-app = FastAPI(title="CarbonKeel", version="0.2.0")
+app = FastAPI(title="CarbonKeel", version="0.3.0")
+
+SITE_DIR = os.path.join(os.path.dirname(__file__), "..", "site")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 
 def _client_key(request: Optional[Request]) -> str:
@@ -141,30 +149,21 @@ def _unsupported(raw):
 
 @app.get("/")
 def index():
-    return FileResponse(
-        os.path.join(os.path.dirname(__file__), "..", "site", "index.html"),
-        headers={"Cache-Control": "no-store, must-revalidate"})
+    return FileResponse(os.path.join(SITE_DIR, "index.html"),
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/app")
-def app_route():
-    # no-store: the single-page app is edited live during demos/development;
-    # a cached shell silently hides new features and breaks calls.
-    return FileResponse(
-        os.path.join(os.path.dirname(__file__), "static", "index.html"),
-        headers={"Cache-Control": "no-store, must-revalidate"})
+def app_page():
+    # no-store: a cached app shell silently hides new features and breaks calls.
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"),
+                        headers={"Cache-Control": "no-store, must-revalidate"})
 
 
 @app.get("/privacy")
-def privacy():
-    return FileResponse(
-        os.path.join(os.path.dirname(__file__), "static", "privacy.html"),
-        headers={"Cache-Control": "public, max-age=86400"})
-
-
-@app.get("/healthz")
-def health():
-    return {"status": "ok"}
+def privacy_page():
+    return FileResponse(os.path.join(SITE_DIR, "privacy.html"),
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/search")
@@ -185,46 +184,122 @@ def search(request: Request, q: str = Query(min_length=3), limit: int = 20):
                         for r in hits[:limit]]}
 
 
-def _whatif(act: AnnualActivity, biofuel_pct: float, speed_pct: float) -> AnnualActivity:
-    """Deterministic scenario transform (prototype physics, clearly labelled):
-    - speed change: fuel per nm scales with speed^2 (cube law per unit time,
-      distance held constant), so tonnes *= (1 + s/100)^2
-    - biofuel: `biofuel_pct` of each fossil fuel's ENERGY switches to
-      certified B100; replacement tonnage is LCV-corrected
-      (t_bio = t_fossil_removed x LCV_fossil / LCV_bio), so the ship does the
-      same work on ~10% more biofuel tonnes.
-    """
-    from ghgcore.fueleu import FUEL_PROPS
-    ratio = (1 + speed_pct / 100.0) ** 2
-    b = max(0.0, min(100.0, biofuel_pct)) / 100.0
-    fossil = {FuelType.HFO, FuelType.LFO, FuelType.MDO_MGO}
-    lcv_bio = FUEL_PROPS[FuelType.BIOFUEL_B100][0]
-    legs = []
-    for leg in act.legs:
-        fuels: list[FuelConsumption] = []
-        bio = 0.0
-        for fc in leg.fuel_consumed:
-            t = fc.tonnes * ratio
-            if fc.fuel in fossil and b > 0:
-                removed = t * b
-                bio += removed * FUEL_PROPS[fc.fuel][0] / lcv_bio
-                t -= removed
-            fuels.append(FuelConsumption(fc.fuel, t))
-        if bio > 0:
-            fuels.append(FuelConsumption(FuelType.BIOFUEL_B100, bio))
-        legs.append(VoyageLeg(leg.scope, leg.distance_nm, fuels,
-                              leg.description + " [what-if]", uk_share=leg.uk_share))
-    return AnnualActivity(act.vessel, act.year, legs, act.ets_calibration, act.fuel_is_combusted)
+def _parse_day(s: Optional[str], what: str) -> Optional[date]:
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s.strip())
+    except ValueError:
+        raise HTTPException(422, f"The {what} date must look like 2026-03-31.")
+
+
+def _scope_rows(rec) -> Optional[dict]:
+    """The register's own scope split, with the share each scope counts for in the EU ETS
+    and FuelEU (Directive Art. 3ga): this is why the bill is not simply total CO2 x price."""
+    if rec.co2_intra_t is None:
+        return None
+    intra, dep = rec.co2_intra_t or 0.0, rec.co2_departed_t or 0.0
+    arr, berth = rec.co2_arrived_t or 0.0, rec.co2_berth_t or 0.0
+    outside = max(0.0, (rec.co2_tonnes or 0.0) - intra - dep - arr - berth)
+    rows = [("Voyages between EU/EEA ports", intra, 1.0),
+            ("Voyages leaving an EU/EEA port", dep, 0.5),
+            ("Voyages arriving at an EU/EEA port", arr, 0.5),
+            ("At berth in EU/EEA ports", berth, 1.0),
+            ("Outside EU/EEA scope", outside, 0.0)]
+    from ghgcore.thetis import rebuilt_ets_co2
+    return {"rows": [{"label": l, "co2_t": round(t, 1), "share": s, "counted_t": round(t * s, 1)}
+                     for l, t, s in rows],
+            "rebuilt_t": round(rebuilt_ets_co2(rec) or 0.0, 1),
+            "reported_t": rec.co2_ets_reported_t}
+
+
+def ship_result(rec, *, dwt=None, year=None, biofuel_pct=0.0, speed_pct=0.0, speed_exp=3.0,
+                aux_pct=0.0, ice_class=False, derogation_pct=0.0,
+                eua=DEFAULT_EUA_PRICE_EUR, uka=DEFAULT_UKA_PRICE_GBP, fx=DEFAULT_EUR_PER_GBP,
+                pool=DEFAULT_POOL_PRICE_EUR_PER_TCO2E, deficit_years=1,
+                charter_from=None, charter_to=None, charter_pct=None,
+                fueleu_basis="penalty") -> dict:
+    """Everything the lookup, the printable report and the CSV show for one ship."""
+    from ghgcore.ets_rules import ETSExceptions
+    from ghgcore.thetis import rebuilt_ets_co2
+    from ghgcore.ets_combined import compute_ets_combined
+    y = year or rec.reporting_period or 2025
+    eu_exc = ETSExceptions(ice_class, derogation_pct / 100.0)
+    verified = {"co2_tonnes": rec.co2_tonnes, "fuel_tonnes": rec.fuel_tonnes,
+                "ets_scope_co2_reported": rec.co2_ets_reported_t,
+                "ets_scope_co2_rebuilt": rebuilt_ets_co2(rec),
+                "est_distance_nm": rec.est_distance_nm,
+                "tech_efficiency": rec.tech_efficiency}
+    scenario = bool(biofuel_pct or speed_pct)
+
+    def transform(act):
+        return apply_whatif(act, biofuel_pct, speed_pct, speed_exp, aux_pct) if scenario else act
+
+    out = {"estimate": True, "scenario": scenario, "source": _EXPORT_NAME, "verified": verified,
+           "scope_split": _scope_rows(rec), "assumptions": assumptions_block(eua, uka, fx, pool),
+           "company": rec.company, "ship_type": rec.ship_type_raw}
+    if dwt:
+        sc = build_scorecard(transform(record_to_activity(rec, year=y, dwt=dwt)), eua_price=eua,
+                             uka_price_gbp=uka, eur_per_gbp=fx, eu_exceptions=eu_exc,
+                             pool_price=pool, consecutive_deficit_years=deficit_years)
+        ets, ukets, feu = sc.ets, sc.ukets, sc.fueleu
+        out["scorecard"] = asdict(sc)
+        from ghgcore.eexi import compute_eexi
+        out["eexi"] = asdict(compute_eexi(rec.ship_type, dwt, dwt, rec.tech_efficiency))
+    else:
+        act = transform(record_to_activity(rec, year=y, dwt=1.0))
+        both = compute_ets_combined(act, eua, uka, fx, eu_exc)
+        ets, ukets = both.eu, both.uk
+        feu = compute_fueleu(act, consecutive_deficit_years=deficit_years, pool_price_eur_per_tco2e=pool)
+        nzf = compute_nzf(act)
+        out.update({"partial": True, "vessel_name": rec.name, "imo": rec.imo, "year": y,
+                    "ets": asdict(ets), "ukets": asdict(ukets), "fueleu": asdict(feu),
+                    "nzf": asdict(nzf)})
+    uk_eur = ukets.cost_gbp * fx
+    feu_pool = feu.pooling_cost_eur if feu.pooling_cost_eur is not None else feu.penalty_eur
+    feu_used = feu_pool if fueleu_basis == "pool" else feu.penalty_eur
+    out["bill"] = {"year": y, "ets_eur": ets.cost_eur, "ukets_eur": round(uk_eur, 0),
+                   "fueleu_penalty_eur": feu.penalty_eur, "fueleu_pooled_eur": feu_pool,
+                   "fueleu_basis": fueleu_basis, "fueleu_eur": feu_used,
+                   "total_eur": round(ets.cost_eur + uk_eur + feu_used, 0),
+                   "total_penalty_eur": round(ets.cost_eur + uk_eur + feu.penalty_eur, 0),
+                   "total_pooled_eur": round(ets.cost_eur + uk_eur + feu_pool, 0)}
+    start, end = _parse_day(charter_from, "charter start"), _parse_day(charter_to, "charter end")
+    if start and end:
+        from ghgcore.charter import split
+        items = {"EU ETS allowances": ets.cost_eur}
+        if uk_eur > 0:
+            items["UK ETS allowances"] = uk_eur
+        if feu_used > 0:
+            items["FuelEU deficit (" + ("pooled" if fueleu_basis == "pool" else "statutory penalty") + ")"] = feu_used
+        try:
+            cs = split(y, start, end, items, None if charter_pct is None else charter_pct / 100.0)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        out["charter"] = asdict(cs)
+    elif start or end:
+        raise HTTPException(422, "Give both the charter start and end dates.")
+    return out
 
 
 @app.get("/api/lookup/{imo}")
 def lookup(imo: str, request: Request = None,
            dwt: Optional[float] = Query(None, gt=0),
-           year: Optional[int] = None,
+           year: Optional[int] = Query(None, ge=2018, le=2035),
            biofuel_pct: float = Query(0, ge=0, le=100),
            speed_pct: float = Query(0, ge=-30, le=20),
+           speed_exp: float = Query(3.0, ge=2.0, le=4.5),
+           aux_pct: float = Query(0, ge=0, le=100),
            ice_class: bool = False,
-           derogation_pct: float = Query(0, ge=0, le=100)):
+           derogation_pct: float = Query(0, ge=0, le=100),
+           eua_price: float = Query(DEFAULT_EUA_PRICE_EUR, gt=0, le=500),
+           uka_price: float = Query(DEFAULT_UKA_PRICE_GBP, gt=0, le=500),
+           eur_per_gbp: float = Query(DEFAULT_EUR_PER_GBP, gt=0.5, le=2.0),
+           pool_price: float = Query(DEFAULT_POOL_PRICE_EUR_PER_TCO2E, ge=0, le=2000),
+           deficit_years: int = Query(1, ge=1, le=20),
+           charter_from: Optional[str] = None, charter_to: Optional[str] = None,
+           charter_pct: Optional[float] = Query(None, ge=0, le=100),
+           fueleu_basis: str = Query("penalty", pattern="^(penalty|pool)$")):
     """ESTIMATE scorecard. DWT is optional: without it the cost engines
     (ETS/UK ETS/FuelEU/NZF) still run — only CII needs capacity — so the
     first answer costs the visitor a single input. biofuel_pct/speed_pct
@@ -237,35 +312,17 @@ def lookup(imo: str, request: Request = None,
         return _suppressed_payload(rec)
     if rec.ship_type is None:
         raise HTTPException(422, _unsupported(rec.ship_type_raw))
-    y = year or rec.reporting_period or 2025
-    from ghgcore.ets_rules import ETSExceptions
-    from ghgcore.thetis import rebuilt_ets_co2
-    eu_exc = ETSExceptions(ice_class, derogation_pct / 100.0)
-    verified = {"co2_tonnes": rec.co2_tonnes, "fuel_tonnes": rec.fuel_tonnes,
-                "ets_scope_co2_reported": rec.co2_ets_reported_t,
-                "ets_scope_co2_rebuilt": rebuilt_ets_co2(rec),
-                "est_distance_nm": rec.est_distance_nm,
-                "tech_efficiency": rec.tech_efficiency}
-    scenario = bool(biofuel_pct or speed_pct)
-
-    def transform(act):
-        return _whatif(act, biofuel_pct, speed_pct) if scenario else act
-
-    if dwt:
-        sc = build_scorecard(transform(record_to_activity(rec, year=y, dwt=dwt)), eu_exceptions=eu_exc)
-        return {"estimate": True, "scenario": scenario, "source": _EXPORT_NAME,
-                "verified": verified, "scorecard": asdict(sc)}
-    act = transform(record_to_activity(rec, year=y, dwt=1.0))
-    feu, ets, ukets, nzf = (compute_fueleu(act), compute_ets(act, exceptions=eu_exc),
-                             compute_ukets(act), compute_nzf(act))
-    return {"estimate": True, "scenario": scenario, "source": _EXPORT_NAME,
-            "verified": verified,
-            "partial": True, "vessel_name": rec.name, "imo": rec.imo, "year": y,
-            "ets": asdict(ets), "ukets": asdict(ukets), "fueleu": asdict(feu), "nzf": asdict(nzf)}
+    return ship_result(rec, dwt=dwt, year=year, biofuel_pct=biofuel_pct, speed_pct=speed_pct,
+                       speed_exp=speed_exp, aux_pct=aux_pct, ice_class=ice_class,
+                       derogation_pct=derogation_pct, eua=eua_price, uka=uka_price, fx=eur_per_gbp,
+                       pool=pool_price, deficit_years=deficit_years, charter_from=charter_from,
+                       charter_to=charter_to, charter_pct=charter_pct, fueleu_basis=fueleu_basis)
 
 
 @app.get("/api/fleet")
-def fleet(imos: str = Query(min_length=7), request: Request = None):
+def fleet(imos: str = Query(min_length=7), request: Request = None,
+          eua_price: float = Query(DEFAULT_EUA_PRICE_EUR, gt=0, le=500),
+          pool_price: float = Query(DEFAULT_POOL_PRICE_EUR_PER_TCO2E, ge=0, le=2000)):
     """Comma/space/newline-separated IMOs -> per-vessel cost summary +
     intra-fleet FuelEU pooling suggestion (Art. 21)."""
     from ghgcore.pooling import PoolCandidate, suggest_pool
@@ -291,11 +348,12 @@ def fleet(imos: str = Query(min_length=7), request: Request = None):
                         "suppressed": True})
             continue
         act = record_to_activity(rec, year=rec.reporting_period or 2025, dwt=1.0)
-        feu, ets, ukets = compute_fueleu(act), compute_ets(act), compute_ukets(act)
+        feu = compute_fueleu(act, pool_price_eur_per_tco2e=pool_price)
+        ets, ukets = compute_ets(act, eua_price), compute_ukets(act)
         # carbon cost the standard lever package would remove (modelled)
-        lev = _whatif(act, 20.0, -10.0)
+        lev = apply_whatif(act, 20.0, -10.0)
         lever_saving = max(0.0, (ets.cost_eur + feu.penalty_eur)
-                           - (compute_ets(lev).cost_eur + compute_fueleu(lev).penalty_eur))
+                           - (compute_ets(lev, eua_price).cost_eur + compute_fueleu(lev).penalty_eur))
         cpd = (rec.co2_tonnes * 1000.0 / rec.est_distance_nm
                if rec.est_distance_nm else None)
         out.append({"imo": imo, "name": rec.name, "ship_type": rec.ship_type_raw,
@@ -303,6 +361,9 @@ def fleet(imos: str = Query(min_length=7), request: Request = None):
                     "ets_cost_eur": ets.cost_eur, "ukets_cost_gbp": ukets.cost_gbp,
                     "fueleu_cb_t": feu.compliance_balance_tco2e,
                     "fueleu_penalty_eur": feu.penalty_eur,
+                    "fueleu_pooled_eur": (feu.pooling_cost_eur if feu.pooling_cost_eur is not None
+                                          else feu.penalty_eur),
+                    "fueleu_applicable": feu.applicable,
                     "lever_saving_eur": round(lever_saving),
                     "co2_per_nm_kg": round(cpd, 1) if cpd else None,
                     "supported": True})
@@ -310,6 +371,8 @@ def fleet(imos: str = Query(min_length=7), request: Request = None):
                                    feu.ghg_intensity))
     pool = suggest_pool(cands) if cands else None
     return {"source": _EXPORT_NAME, "vessels": out,
+            "assumptions": assumptions_block(eua_price, DEFAULT_UKA_PRICE_GBP, DEFAULT_EUR_PER_GBP,
+                                             pool_price),
             "suppressed_imos": hidden,
             "pooling": None if pool is None else {
                 "avoided_penalty_eur": pool.avoided_penalty_eur,
@@ -393,10 +456,12 @@ def eexi_custom(ship_type: ShipType, dwt: float = Query(gt=0),
 
 
 @app.get("/api/audit/{imo}")
-def audit(imo: str, dwt: float = Query(gt=0), year: Optional[int] = None):
+def audit(imo: str, dwt: float = Query(gt=0), year: Optional[int] = None,
+          eua_price: float = Query(DEFAULT_EUA_PRICE_EUR, gt=0, le=500), request: Request = None):
     """Verifier-ready calculation worksheet: inputs, every parameter used
     (with source citation), intermediates, results."""
     from ghgcore.audit import build_audit
+    _guard(request)
     rec = records().get(imo)
     if rec is None:
         raise HTTPException(404, f"IMO {imo} was not found in the public EU MRV register.")
@@ -405,7 +470,7 @@ def audit(imo: str, dwt: float = Query(gt=0), year: Optional[int] = None):
     if rec.ship_type is None:
         raise HTTPException(422, _unsupported(rec.ship_type_raw))
     y = year or rec.reporting_period or 2025
-    return build_audit(record_to_activity(rec, year=y, dwt=dwt), estimate=True)
+    return build_audit(record_to_activity(rec, year=y, dwt=dwt), eua_price=eua_price, estimate=True)
 
 
 @app.get("/api/method")
@@ -417,19 +482,30 @@ def method():
 
 
 def _require_key(key: Optional[str]) -> str:
+    """The calculator is open unless CARBONKEEL_REQUIRE_KEY is set (see ghgcore/access.py)."""
     from ghgcore import access
+    if not access.required():
+        return ""
     if not access.is_valid(key):
-        raise HTTPException(401, "This tool is for ship operators. Enter your "
-                                 "access key, or ask us for one. We issue keys to "
-                                 "operators and design partners.")
+        raise HTTPException(401, "This tool needs an access key at the moment. Enter yours, "
+                                 "or email hello@carbonkeel.com for one.")
     return access.label_for(key)
+
+
+@app.get("/api/access/status")
+def access_status():
+    from ghgcore import access
+    return {"required": access.required()}
 
 
 @app.get("/api/access/check")
 def access_check(key: str = Query(...)):
     """Validate an access key (used by the UI unlock screen)."""
-    label = _require_key(key)
-    return {"ok": True, "issued_to": label}
+    from ghgcore import access
+    if not access.is_valid(key):
+        raise HTTPException(401, "That access key is not recognised. Check it, or email "
+                                 "hello@carbonkeel.com.")
+    return {"ok": True, "issued_to": access.label_for(key)}
 
 
 class SpeedIn(BaseModel):
@@ -442,49 +518,158 @@ class SpeedIn(BaseModel):
     aux_t_per_day_in_port: float = 0.0
     main_fuel: FuelType = FuelType.HFO
     aux_fuel: FuelType = FuelType.MDO_MGO
+    speed_exponent: float = Field(3.0, ge=2.0, le=4.5)
+
+
+class G5DeductionIn(BaseModel):
+    kind: str
+    fuel: FuelType
+    tonnes: float = Field(0.0, ge=0)
+    distance_nm: float = Field(0.0, ge=0)
+    basis: str = Field("", max_length=300)
+
+
+class G5In(BaseModel):
+    deductions: list[G5DeductionIn] = []
+    shuttle_tanker: bool = False
+    ice_class: str = Field("", max_length=40)
+    fi: float = Field(1.0, gt=0, le=3)
+    fm: float = Field(1.0, gt=0, le=3)
+    fc: float = Field(1.0, gt=0, le=3)
+    fivse: float = Field(1.0, gt=0, le=3)
+    self_unloading: bool = False
 
 
 class CIIIn(BaseModel):
     ship_type: ShipType
-    dwt: float = 0.0
-    gt: float = 0.0
-    year: int = 2026
+    dwt: float = Field(0.0, ge=0)
+    gt: float = Field(0.0, ge=0)
+    year: int = Field(2026, ge=2023, le=2035)
     fuel_tonnes: dict[FuelType, float] = {}
-    distance_nm: float = 0.0
+    distance_nm: float = Field(0.0, ge=0)
     speed: Optional[SpeedIn] = None
-    # G5 (documented operator values only)
+    # G5 (documented operator values only): summary totals, or itemised in `g5`
     excluded_co2_t: float = 0.0
     excluded_distance_nm: float = 0.0
     capacity_correction: float = 1.0
     corrections_basis: str = ""
-    vessel_name: str = ""
-    imo_number: str = ""
+    g5: Optional[G5In] = None
+    vessel_name: str = Field("", max_length=120)
+    imo_number: str = Field("", max_length=20)
 
 
-@app.post("/api/cii/compute")
-def cii_compute(inp: CIIIn, key: Optional[str] = Query(None),
-                request: Request = None):
-    """LOCKED — owner-data CII calculation (G1–G5) with forward trajectory."""
-    _require_key(key)
+def _cii_from(inp: CIIIn):
     from ghgcore.cii_calc import CIIInput, SpeedProfile, compute_cii_full
     from ghgcore.cii import CIICorrections
-    sp = None
-    if inp.speed is not None:
-        sp = SpeedProfile(**inp.speed.model_dump())
+    from ghgcore.g5 import G5Deduction, G5Input
+    sp = SpeedProfile(**inp.speed.model_dump()) if inp.speed is not None else None
     corr = None
     if (inp.excluded_co2_t or inp.excluded_distance_nm
             or inp.capacity_correction != 1.0):
         corr = CIICorrections(inp.excluded_co2_t, inp.excluded_distance_nm,
                               inp.capacity_correction, inp.corrections_basis)
+    g5 = None
+    if inp.g5 is not None:
+        g = inp.g5
+        g5 = G5Input([G5Deduction(d.kind, d.fuel, d.tonnes, d.distance_nm, d.basis)
+                      for d in g.deductions], g.shuttle_tanker, g.ice_class,
+                     g.fi, g.fm, g.fc, g.fivse, g.self_unloading)
+        if not g5.deductions and not g5.shuttle_tanker and (g.fi, g.fm, g.fc, g.fivse) == (1, 1, 1, 1):
+            g5 = None
     try:
-        res = compute_cii_full(CIIInput(
+        return compute_cii_full(CIIInput(
             ship_type=inp.ship_type, dwt=inp.dwt, gt=inp.gt, year=inp.year,
             fuel_tonnes={k: v for k, v in inp.fuel_tonnes.items() if v > 0},
             distance_nm=inp.distance_nm, speed_profile=sp, corrections=corr,
-            vessel_name=inp.vessel_name, imo_number=inp.imo_number))
+            vessel_name=inp.vessel_name, imo_number=inp.imo_number, g5=g5))
     except (ValueError, KeyError) as e:
         raise HTTPException(422, str(e))
-    return asdict(res)
+
+
+@app.post("/api/cii/compute")
+def cii_compute(inp: CIIIn, key: Optional[str] = Query(None),
+                request: Request = None):
+    """Owner-data CII calculation (G1–G5) with forward trajectory."""
+    _require_key(key)
+    return asdict(_cii_from(inp))
+
+
+class ScopeIn(BaseModel):
+    intra_eea: float = Field(0.0, ge=0, le=100)
+    extra_eea: float = Field(0.0, ge=0, le=100)
+    berth_eea: float = Field(0.0, ge=0, le=100)
+    uk_domestic: float = Field(0.0, ge=0, le=100)
+    uk_gb_ni: float = Field(0.0, ge=0, le=100)
+
+
+class CalcIn(CIIIn):
+    scope: ScopeIn = ScopeIn()
+    engine_type: str = "otto_medium_speed"
+    eua_price: float = Field(DEFAULT_EUA_PRICE_EUR, gt=0, le=500)
+    uka_price: float = Field(DEFAULT_UKA_PRICE_GBP, gt=0, le=500)
+    eur_per_gbp: float = Field(DEFAULT_EUR_PER_GBP, gt=0.5, le=2.0)
+    pool_price: float = Field(DEFAULT_POOL_PRICE_EUR_PER_TCO2E, ge=0, le=2000)
+    deficit_years: int = Field(1, ge=1, le=20)
+    ice_class_ia: bool = False
+    derogation_pct: float = Field(0.0, ge=0, le=100)
+    charter_from: Optional[str] = None
+    charter_to: Optional[str] = None
+    charter_pct: Optional[float] = Field(None, ge=0, le=100)
+    fueleu_basis: str = Field("penalty", pattern="^(penalty|pool)$")
+
+
+@app.post("/api/calc")
+def calc(inp: CalcIn, key: Optional[str] = Query(None), request: Request = None):
+    """Owner data in, the whole position out: CII (G1-G5) plus the EU ETS, UK ETS, FuelEU
+    and NZF bill from the operator's own fuel, split by voyage scope. Nothing is stored."""
+    _require_key(key)
+    _guard(request)
+    from ghgcore.ownerbill import ScopeSplit, build_activity
+    from ghgcore.ets_combined import compute_ets_combined
+    from ghgcore.ets_rules import ETSExceptions
+    from ghgcore.schema import EngineType
+    cii = _cii_from(inp)
+    fuels = {FuelType(k): v for k, v in cii.fuel_tonnes.items()}
+    try:
+        engine = EngineType(inp.engine_type)
+        act, rows = build_activity(inp.vessel_name, inp.imo_number, inp.ship_type, inp.dwt, inp.gt,
+                                   inp.year, fuels, ScopeSplit(**inp.scope.model_dump()), engine)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    both = compute_ets_combined(act, inp.eua_price, inp.uka_price, inp.eur_per_gbp,
+                                ETSExceptions(inp.ice_class_ia, inp.derogation_pct / 100.0))
+    feu = compute_fueleu(act, consecutive_deficit_years=inp.deficit_years,
+                         pool_price_eur_per_tco2e=inp.pool_price)
+    nzf = compute_nzf(act)
+    uk_eur = both.uk.cost_gbp * inp.eur_per_gbp
+    feu_pool = feu.pooling_cost_eur if feu.pooling_cost_eur is not None else feu.penalty_eur
+    feu_used = feu_pool if inp.fueleu_basis == "pool" else feu.penalty_eur
+    out = {"estimate": cii.estimated_inputs, "cii": asdict(cii), "scope_rows": rows,
+           "ets": asdict(both.eu), "ukets": asdict(both.uk), "fueleu": asdict(feu), "nzf": asdict(nzf),
+           "assumptions": assumptions_block(inp.eua_price, inp.uka_price, inp.eur_per_gbp, inp.pool_price),
+           "bill": {"year": inp.year, "ets_eur": both.eu.cost_eur, "ukets_eur": round(uk_eur, 0),
+                    "fueleu_penalty_eur": feu.penalty_eur, "fueleu_pooled_eur": feu_pool,
+                    "fueleu_basis": inp.fueleu_basis, "fueleu_eur": feu_used,
+                    "total_eur": round(both.eu.cost_eur + uk_eur + feu_used, 0),
+                    "total_penalty_eur": round(both.eu.cost_eur + uk_eur + feu.penalty_eur, 0),
+                    "total_pooled_eur": round(both.eu.cost_eur + uk_eur + feu_pool, 0)}}
+    start = _parse_day(inp.charter_from, "charter start")
+    end = _parse_day(inp.charter_to, "charter end")
+    if start and end:
+        from ghgcore.charter import split
+        items = {"EU ETS allowances": both.eu.cost_eur}
+        if uk_eur > 0:
+            items["UK ETS allowances"] = uk_eur
+        if feu_used > 0:
+            items["FuelEU deficit (" + ("pooled" if inp.fueleu_basis == "pool" else "statutory penalty") + ")"] = feu_used
+        try:
+            out["charter"] = asdict(split(inp.year, start, end, items,
+                                          None if inp.charter_pct is None else inp.charter_pct / 100.0))
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+    elif start or end:
+        raise HTTPException(422, "Give both the charter start and end dates.")
+    return out
 
 
 @app.get("/api/privacy")
@@ -525,13 +710,76 @@ def privacy_notice():
 
 @app.get("/robots.txt")
 def robots():
-    """Per-vessel derived figures must not be indexed: searching an operator's
-    ship name should never surface our estimate of their compliance bill."""
+    """The landing page and privacy notice are indexable. Per-vessel derived figures are
+    not: searching an operator's ship name should never surface our estimate of its bill."""
     return PlainTextResponse(
         "User-agent: *\n"
+        "Allow: /$\n"
+        "Allow: /privacy\n"
         "Disallow: /api/\n"
         "Disallow: /report\n"
-        "Allow: /$\n")
+        "Disallow: /app\n"
+        "Sitemap: https://carbonkeel.com/sitemap.xml\n")
+
+
+@app.get("/sitemap.xml")
+def sitemap():
+    from fastapi.responses import Response
+    body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            '  <url><loc>https://carbonkeel.com/</loc><changefreq>weekly</changefreq></url>\n'
+            '  <url><loc>https://carbonkeel.com/privacy</loc><changefreq>yearly</changefreq></url>\n'
+            '</urlset>\n')
+    return Response(body, media_type="application/xml")
+
+
+class ShipReportQ:
+    def __init__(self, dwt: Optional[float] = Query(None, gt=0),
+                 year: Optional[int] = Query(None, ge=2018, le=2035),
+                 eua_price: float = Query(DEFAULT_EUA_PRICE_EUR, gt=0, le=500),
+                 uka_price: float = Query(DEFAULT_UKA_PRICE_GBP, gt=0, le=500),
+                 eur_per_gbp: float = Query(DEFAULT_EUR_PER_GBP, gt=0.5, le=2.0),
+                 pool_price: float = Query(DEFAULT_POOL_PRICE_EUR_PER_TCO2E, ge=0, le=2000),
+                 deficit_years: int = Query(1, ge=1, le=20),
+                 ice_class: bool = False,
+                 derogation_pct: float = Query(0, ge=0, le=100),
+                 charter_from: Optional[str] = None, charter_to: Optional[str] = None,
+                 charter_pct: Optional[float] = Query(None, ge=0, le=100),
+                 fueleu_basis: str = Query("penalty", pattern="^(penalty|pool)$")):
+        self.kw = dict(dwt=dwt, year=year, eua=eua_price, uka=uka_price, fx=eur_per_gbp,
+                       pool=pool_price, deficit_years=deficit_years, ice_class=ice_class,
+                       derogation_pct=derogation_pct, charter_from=charter_from,
+                       charter_to=charter_to, charter_pct=charter_pct, fueleu_basis=fueleu_basis)
+
+
+def _report_result(imo: str, q: ShipReportQ, request: Optional[Request]) -> dict:
+    _guard(request)
+    rec = records().get(imo)
+    if rec is None:
+        raise HTTPException(404, f"IMO {imo} was not found in the public EU MRV register.")
+    if privacy.is_suppressed(imo):
+        raise HTTPException(403, privacy.SUPPRESSION_NOTE)
+    if rec.ship_type is None:
+        raise HTTPException(422, _unsupported(rec.ship_type_raw))
+    return ship_result(rec, **q.kw)
+
+
+@app.get("/report/ship/{imo}.csv")
+def ship_report_csv_route(imo: str, request: Request, q: ShipReportQ = Depends()):
+    from fastapi.responses import Response
+    from .ship_report import ship_report_csv
+    r = _report_result(imo, q, request)
+    return Response(ship_report_csv(r), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="carbonkeel-{imo}.csv"'})
+
+
+@app.get("/report/ship/{imo}")
+def ship_report_route(imo: str, request: Request, q: ShipReportQ = Depends()):
+    from fastapi.responses import HTMLResponse
+    from .ship_report import ship_report_html
+    r = _report_result(imo, q, request)
+    qs = request.url.query
+    return HTMLResponse(ship_report_html(r, f"/report/ship/{imo}.csv" + (f"?{qs}" if qs else "")))
 
 
 class ClaimIn(BaseModel):
@@ -616,7 +864,8 @@ def pool_agreement(imos: str = Query(min_length=7), year: int = 2026,
 
 @app.get("/report")
 def report(imos: str = Query(min_length=7), year: Optional[int] = None,
-           request: Request = None):
+           request: Request = None,
+           eua_price: float = Query(DEFAULT_EUA_PRICE_EUR, gt=0, le=500)):
     """Branded fleet health-check page (print to PDF) — the lead magnet."""
     from fastapi.responses import HTMLResponse
     from .report import fleet_report_html
@@ -629,7 +878,7 @@ def report(imos: str = Query(min_length=7), year: Optional[int] = None,
             "ships. If these are your ships, claim them under “Your data” "
             "for the full report.")
     _guard(request, cost=len(wanted))
-    return HTMLResponse(fleet_report_html(records(), wanted, year))
+    return HTMLResponse(fleet_report_html(records(), wanted, year, eua_price=eua_price))
 
 
 def _parse_imos(raw: str) -> list[str]:
@@ -659,7 +908,7 @@ class ScoreIn(BaseModel):
     gt: float = 0.0
     year: int
     legs: list[LegIn]
-    eua_price: float = 70.0
+    eua_price: float = DEFAULT_EUA_PRICE_EUR
     nzf_year: int = 2028
 
 

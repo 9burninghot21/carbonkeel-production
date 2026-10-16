@@ -20,9 +20,10 @@ warnings.filterwarnings("ignore")
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from ghgcore.exports import newest_per_year
+from ghgcore.assumptions import DEFAULT_EUA_PRICE_EUR
 FOCUS = {"container ship", "bulk carrier", "oil tanker", "chemical tanker"}
-EUA_PRICES = (60, 70, 80, 90)
-BASE_PRICE = 70
+BASE_PRICE = int(DEFAULT_EUA_PRICE_EUR)
+EUA_PRICES = (70, BASE_PRICE, 100)
 IMO, NAME, TYPE, CO_NAME, CO2_TOTAL, CO2_ETS = 0, 1, 2, 9, 28, 37
 
 

@@ -15,6 +15,7 @@ from .schema import AnnualActivity, VoyageScope
 from .euets import compute_ets, ETSResult
 from .ukets import compute_ukets, UKETSResult, DEFAULT_UKA_PRICE_GBP
 from .ets_rules import ETSExceptions, UKETSExceptions
+from .assumptions import DEFAULT_EUA_PRICE_EUR, DEFAULT_EUR_PER_GBP
 
 EU_SCOPES = (VoyageScope.INTRA_EEA, VoyageScope.EXTRA_EEA, VoyageScope.AT_BERTH_EEA)
 VALID_UK_SHARES = (0.0, 0.5, 1.0)
@@ -42,8 +43,9 @@ def check_disjoint(activity: AnnualActivity) -> list[str]:
     return out
 
 
-def compute_ets_combined(activity: AnnualActivity, eua_price_eur: float = 70.0,
-                         uka_price_gbp: float = DEFAULT_UKA_PRICE_GBP, eur_per_gbp: float = 1.15,
+def compute_ets_combined(activity: AnnualActivity, eua_price_eur: float = DEFAULT_EUA_PRICE_EUR,
+                         uka_price_gbp: float = DEFAULT_UKA_PRICE_GBP,
+                         eur_per_gbp: float = DEFAULT_EUR_PER_GBP,
                          eu_exceptions: Optional[ETSExceptions] = None,
                          uk_exceptions: Optional[UKETSExceptions] = None) -> CombinedETS:
     warnings = check_disjoint(activity)

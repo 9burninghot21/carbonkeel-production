@@ -28,6 +28,7 @@ from .ets_rules import (GWP_CH4, GWP_N2O, NON_CO2_EF, LNG_SLIP_BY_ENGINE, PHASE_
                         ICE_CLASS_DISCOUNT, EU_EXCESS_PENALTY_EUR_PER_T, ETSExceptions,
                         eu_phase_in, gas_emissions, non_co2 as _non_co2_new)
 from .schema import EngineType, FuelType
+from .assumptions import DEFAULT_EUA_PRICE_EUR
 
 SCOPE_SHARE = {VoyageScope.INTRA_EEA: 1.0, VoyageScope.AT_BERTH_EEA: 1.0,
                VoyageScope.EXTRA_EEA: 0.5, VoyageScope.OUT_OF_SCOPE: 0.0}
@@ -57,7 +58,7 @@ class ETSResult:
     excess_penalty_eur_per_t: float = EU_EXCESS_PENALTY_EUR_PER_T
 
 
-def compute_ets(activity: AnnualActivity, eua_price_eur: float = 70.0,
+def compute_ets(activity: AnnualActivity, eua_price_eur: float = DEFAULT_EUA_PRICE_EUR,
                 exceptions: Optional[ETSExceptions] = None) -> ETSResult:
     notes: list[str] = []
     year = activity.year

@@ -209,7 +209,7 @@ def check_server_text():
         check(text in land, f"landing worked example matches the engines: {label} ({text})", "update site/index.html")
 
     code, m = http("/api/method", want_json=False)
-    check("(144 checks)" in m and "96 checks" not in m, "method page quotes the real test count")
+    check("(220 checks)" in m and "144 checks" not in m, "method page quotes the real test count")
     vm = json.load(open(os.path.join(ROOT, "data", "verifier_match.json"), encoding="utf-8"))
     check("exactly on spot" not in m and f"{vm['share_exact'] * 100:.1f}%" in m,
           "method page states the measured match rate (data/verifier_match.json), not an absolute")

@@ -11,26 +11,26 @@ from . import cii as cii_mod
 from . import fueleu as feu_mod
 from . import euets as ets_mod
 from .scorecard import build_scorecard
+from .assumptions import DEFAULT_EUA_PRICE_EUR
 
 SOURCES = {
     "cf": "CF factors: 2018 DCS Guidelines / MEPC.352(78) (G1)",
     "g2": "Reference lines: MEPC.353(78) Annex 15 Table 1 (verified 8 Jul 2026)",
     "g3": "Z factors: MEPC.338(76) as amended by MEPC.400(83)",
     "g4": "Rating boundaries: MEPC.354(78) Annex 16 Table 1 (verified 8 Jul 2026)",
-    "fueleu": "Reg. (EU) 2023/1805: baseline 91.16 gCO2e/MJ, Art. 23 penalty "
-              "EUR 2,400/t VLSFO-eq; fuel LCV/WtW = prototype defaults, "
-              "VERIFY vs Annex II before customer-facing use",
-    "ets": "Directive 2003/87/EC; phase-in 40/70/100%; CH4/N2O from 2026 "
-           "(GWP100 28/265); non-CO2 EFs = prototype defaults, VERIFY vs "
-           "MRV implementing acts",
-    "ukets": "UK ETS (Extension to Maritime Activities) Order 2026 — domestic "
-             "voyages/berth, GB<->NI 50%, CO2+CH4+N2O, no phase-in",
-    "nzf": "IMO Net-Zero Framework as approved MEPC 83 (SCENARIO — not "
-           "adopted; vote ~Oct 2026)",
+    "fueleu": "Reg. (EU) 2023/1805: baseline 91.16 gCO2e/MJ (Art. 4, Annex I); fuel LCV and "
+              "WtW = Annex II defaults (verified 8 Jul 2026); penalty Art. 23 and Annex IV Part B, "
+              "EUR 2,400 per t VLSFO-equivalent, x (1 + (n-1)/10) for consecutive deficits (Art. 23(2))",
+    "ets": "Directive 2003/87/EC: scope Art. 3ga, phase-in 40/70/100% Art. 3gb, CH4/N2O from 2026 "
+           "(Annex I; GWP100 28/265, Delegated Reg. 2020/1044); emission factors and slip from "
+           "Reg. 2015/757 Annex I Part A as amended by Delegated Reg. 2023/2776",
+    "ukets": "SI 2026/392 Schedule 2A: domestic voyages and UK berths, GB<->NI 50%, "
+             "CO2+CH4+N2O, no phase-in",
+    "nzf": "IMO Net-Zero Framework as approved at MEPC 83 (SCENARIO: not adopted)",
 }
 
 
-def build_audit(activity: AnnualActivity, eua_price: float = 70.0,
+def build_audit(activity: AnnualActivity, eua_price: float = DEFAULT_EUA_PRICE_EUR,
                 nzf_year: int = 2028, estimate: bool = False) -> dict:
     v = activity.vessel
     sc = build_scorecard(activity, eua_price=eua_price, nzf_year=nzf_year)
@@ -43,7 +43,7 @@ def build_audit(activity: AnnualActivity, eua_price: float = 70.0,
 
     return {
         "meta": {
-            "generated_by": "CarbonKeel deterministic engines v0.2 — no LLM "
+            "generated_by": "CarbonKeel deterministic engines v0.3 — no LLM "
                             "touches any figure in this worksheet",
             "estimate": estimate,
             "eua_price_assumption_eur": eua_price,

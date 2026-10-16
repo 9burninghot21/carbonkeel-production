@@ -3,7 +3,7 @@
 Every number CarbonKeel shows comes from one of seven deterministic engines.
 This document states each engine's formula, parameters (with source), and a
 worked example you can recompute on a calculator. The same examples run as
-assertions in `tests/test_engines.py` (144 checks) — if you change a table,
+assertions in `tests/test_engines.py` (220 checks) — if you change a table,
 the tests force the hand-computation to be redone.
 
 ## 1. CII (MARPOL Annex VI Reg. 28 — `cii.py`)
@@ -24,7 +24,7 @@ rating       = A/B/C/D/E via attained/required vs dd vector        [G4]
 - Z factors: 2023–26 = 5/7/9/11%; 2027–30 = 13.625/16.25/18.875/21.5%
   (MEPC.400(83)).
 - G5 corrections (MEPC.355(78)) are applied only when the operator supplies
-  documented values (`CIICorrections`) — never inferred.
+  documented values — never inferred. See section 1b.
 
 **Worked example** (test `test_cii`): bulk carrier, 50,000 dwt, 3,000 t HFO,
 50,000 nm, 2026. CO₂ = 3,000×3.114 = 9,342 t. Attained =
@@ -34,6 +34,38 @@ rating       = A/B/C/D/E via attained/required vs dd vector        [G4]
 **Known estimate-path caveats** (free lookup only): distance is backed out of
 "CO₂ per distance" in the MRV filing; DWT/GT is user-supplied; fuel mix is
 assumed HFO-equivalent. Owner data removes all three.
+
+## 1b. CII corrections and voyage adjustments (MEPC.355(78), G5 — `g5.py`)
+
+```
+         Σ_j CF_j · { FC_j − ( FC_voyage,j + TF_j + (0.75 − 0.03·y) · (FC_electrical,j + FC_boiler,j + FC_others,j) ) }
+CII  =  ──────────────────────────────────────────────────────────────────────────────────────────────
+                                 fi · fm · fc · fiVSE · Capacity · (D_t − D_x)
+```
+- y counts from 2023 = 0, so the electrical, boiler and other deductions count at
+  0.75 in 2023, 0.66 in 2026 and 0.54 in 2030 (G5 section 4).
+- Voyage adjustments (para 4.1): situations endangering safe navigation under
+  MARPOL Annex VI reg. 3.1, and ice-classed ships sailing within the ice edge. The
+  fuel and the distance of the period both come out.
+- FC_electrical (para 4.3): refrigerated containers on any ship (Appendix 1 Part A.1:
+  without a kWh meter, 2.75 kW × 24 h × SFOC × reefer-days, SFOC 175 g/kWh 2-stroke
+  or 200 g/kWh 4-stroke); cargo cooling on gas and LNG carriers; electric discharge
+  pumps on tankers. FC_boiler (para 4.4): cargo heating and steam cargo pumps on
+  tankers. FC_others (para 4.5): standalone engine-driven cargo pumps on tankers.
+- STS voyages on tankers (paras 2.8, 4.2: each leg ≤ 600 nm and ≤ 72 h):
+  TF = (1 − 6.1742 × DWT^−0.246) × fuel on STS voyages. Shuttle tankers with
+  dynamic positioning (para 2.9): TF = (1 − 5.6805 × DWT^−0.208) × all fuel. With
+  either, the electrical, boiler and other deductions are not used.
+- fi, fm (IA and IA Super), fc (chemical tankers) and fiVSE (self-unloading bulk
+  carriers) only if they are in the ship's EEDI/EEXI Technical File (para 4.6).
+- The calculator refuses any deduction the guideline does not allow for the ship
+  type, any deduction larger than the fuel reported, and combinations the guideline
+  excludes. The rating trajectory recomputes the deduction share for each year.
+
+**Worked example** (test `test_g5_corrections`): container ship, 50,000 dwt,
+10,000 t HFO, 100,000 nm, 2026, 11.55 t HFO for reefers (1,000 reefer-days at
+175 g/kWh). Numerator = 3.114 × (10,000 − 0.66 × 11.55) = **31,116.26 t**;
+attained = 31,116.26 × 10⁶ / (50,000 × 100,000) = **6.2233** (6.228 without).
 
 ## 2. EEXI (Reg. 23/25 — `eexi.py`) — FREE CHECK
 
@@ -120,9 +152,25 @@ penalty    = |CB| / (intensity × 41,000) × €2,400        [Art. 23]
   from ETS.
 - Certified values (Art. 10) override defaults via `certified_props`.
 
+- Applies from reporting period 2025 (no FuelEU result before that) to ships above
+  5,000 GT carrying cargo or passengers (Art. 2). On public data, a ship whose
+  verifier reported no ETS-scope emissions is shown as outside FuelEU too: the two
+  schemes cover the same ships, and charging it would be a phantom penalty.
+- **Repeat deficits** (Art. 23(2)): the penalty is multiplied by 1 + (n − 1)/10,
+  where n is the number of consecutive reporting periods with a FuelEU penalty for
+  the ship. The user states n; the public record cannot show it.
+- **Pooling instead of paying.** The statutory penalty per tonne of deficit is
+  10⁶ / (intensity × 41,000) × €2,400, about **€638 per tCO₂e** at HFO's 91.74.
+  Pool surplus trades far below that (mid-2026 market levels about €105–120 per
+  tCO₂e), so every result also shows the deficit bought from a pool at a price the
+  user sets (default €110). Both totals are shown; the user picks which one heads
+  the bill.
+
 **Worked example** (test `test_fueleu`): 3,000 t HFO intra-EEA, 2026.
 Energy = 121.5×10⁶ MJ; intensity 91.74 vs target 89.3368 → CB = **−292 t**;
-penalty = 292×10⁶/(91.74×41,000)×2,400 = **€186,310**.
+penalty = 292×10⁶/(91.74×41,000)×2,400 = **€186,310**. Third consecutive deficit:
+× 1.2 = **€223,572** (test `test_fueleu_penalty_rules`). Pooled at €110/t instead:
+291.99 × 110 = **€32,119**.
 
 ## 5. UK ETS (`ukets.py`) — SI 2026/392, Schedule 2A
 Same gases, factors, GWPs (28 and 265) and monitoring formula as the EU ETS
@@ -144,6 +192,38 @@ verification.
 Both are computed for the same ship-year, added in euros, and checked so that no
 leg is counted in both (a leg that touches an EU port cannot be a UK domestic leg).
 
+## 5c. Your own fuel, split by voyage scope (`ownerbill.py`)
+The operator states the share of the year's fuel burned on each kind of voyage:
+between EU/EEA ports (EU 100%), into or out of the EU/EEA (EU 50%), at EU/EEA
+berths (EU 100%), UK domestic and UK berths (UK 100%), Great Britain to Northern
+Ireland (UK 50%); the rest is out of scope. Each share becomes one leg, and the EU
+ETS, UK ETS and FuelEU engines apply their own rules to it. G5 corrections change
+the CII only; the bill uses all the fuel.
+
+**Worked example** (test `test_owner_bill_split`): 4,300 t HFO, 2026, 40% between
+EU ports, 30% into or out of the EU, 10% at EU berths, 5% UK domestic. EU fuel in
+scope = 4,300 × (0.40 + 0.5 × 0.30 + 0.10) = 2,795 t; CO₂e = 2,795 × (3.114 +
+0.00005 × 28 + 0.00018 × 265) = **8,840.86 t**; at €85 = **€751,473**. UK: 215 t ×
+3.1631 = 680.07 t at £40 = **£27,203**.
+
+## 5d. Owner and time-charterer split (`charter.py`)
+BIMCO's ETS Allowances Clause for Time Charter Parties 2022 and FuelEU Maritime
+Clause for Time Charter Parties 2024 put the cost of emissions during the charter
+period on the charterer. Without voyage data the split is pro rata by days
+(charter days in the year ÷ days in the year); with voyage data the user enters the
+charter period's share of emissions directly. The clauses allocate the emissions
+actually reported for the period, so the result says which basis it used.
+Example (test `test_charter_split`): 1 March to 31 August 2025 = 184 of 365 days,
+50.41%: of a €100,000 ETS cost the charterer pays €50,411.
+
+## 5e. What-if levers (`whatif.py`)
+Speed change s on the same distance: main-engine fuel per mile scales with
+(1 + s)^(n − 1) (n = 3, the cube law, by default; adjustable from 2 to 4.5);
+auxiliary and boiler fuel burns per day, so it scales with 1/(1 + s); fuel at berth
+does not change with sea speed. Biofuel: a share of each fossil fuel's energy moves
+to certified B100, with the tonnage corrected for its lower calorific value. Every
+what-if result is labelled as a scenario.
+
 ## 6. IMO Net-Zero Framework (`nzf.py`) — SCENARIO until adopted
 ```
 GFI = Σ(tonnes × LCV × WtW) / Σ(tonnes × LCV)    [all voyages, WtW]
@@ -152,7 +232,9 @@ Base…Direct band    → Tier 1 units @ $100/t
 below Direct target → Surplus Units
 ```
 Targets per MEPC 83 approval (2028 Base −4% and Direct −17% against 93.3). Every
-output carries the "not yet adopted" note. The adoption vote is expected in October 2026.
+output carries the "not yet adopted" note. In October 2025 the IMO postponed the
+adoption decision by one year; it had not been adopted when these notes were last
+checked (17 October 2026).
 
 ## 7. Pooling optimizer (`pooling.py`)
 0/1 knapsack: admit deficit ships (weight = |CB|, value = standalone
@@ -165,6 +247,10 @@ density fallback above. Test pins the optimum against a hand-built case.
   column names, and its output is validated then applied by code).
 - ESTIMATE labelling on all public-data outputs. Every parameter and its source is
   listed in a full calculation worksheet, available from the Verifier view of any ship.
-- Currency and allowance-cost assumptions (EU allowance €70, UK allowance £40,
-  €/£ 1.15) are inputs, not facts. The app also shows the EU allowance cost at
-  €60 and €100.
+- Market assumptions are inputs, not facts, and every result echoes the value it
+  used: EU allowance €85 (the September 2026 market average was €85.6), UK
+  allowance £40 (indicative), €/£ 1.15, FuelEU pool price €110 per tCO₂e (mid-2026
+  market levels). The user can change each one, and the bill also shows the EU
+  allowance cost €15 either side.
+- CarbonKeel is not an accredited verifier. Allowances are surrendered, and FuelEU
+  balances settled, on the figures the ship's verifier accepts.

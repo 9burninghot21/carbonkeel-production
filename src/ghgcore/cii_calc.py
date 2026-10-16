@@ -17,11 +17,12 @@ G5  MEPC.355(78)  voyage adjustments & correction factors — applied from
 Two ways in
 -----------
 1. **Actual fuel** — tonnes per fuel type from BDNs/noon reports. Preferred.
-2. **Speed-based estimate** — when fuel is not to hand, the classic
-   Admiralty/cube relation against a known reference point (sea-trial or
-   charter-party description): consumption/day scales with (V/V_ref)³.
-   Auxiliary and port consumption are added flat. Clearly labelled as an
-   estimate in the result.
+2. **Speed-based estimate** — when fuel is not to hand, a power law against a
+   known reference point (sea-trial or charter-party description):
+   main-engine consumption/day scales with (V/V_ref)^n, n = 3 by default
+   (the cube law) and adjustable, since eco-ships and ships with a power
+   limitation often sit between about 2.6 and 3.5. Auxiliary and port
+   consumption are added flat per day. Clearly labelled as an estimate.
 
 Beyond the rating, the value is in the forward view: the Z factor tightens
 every year to 2030, so a vessel that is C today can be E in 2029 without
@@ -34,8 +35,10 @@ from typing import Optional
 from .schema import FuelType, ShipType, Vessel
 from .cii import (CF_TCO2_PER_T, Z_FACTORS, CIICorrections, _capacities,
                   _dd, _g2_params)
+from .g5 import G5Input, apply_g5
 
 RATING_ORDER = ["A", "B", "C", "D", "E"]
+SPEED_EXPONENT_RANGE = (2.0, 4.5)
 
 
 # ---------------------------------------------------------------- inputs --
@@ -56,6 +59,7 @@ class SpeedProfile:
     aux_t_per_day_in_port: float = 0.0
     main_fuel: FuelType = FuelType.HFO
     aux_fuel: FuelType = FuelType.MDO_MGO
+    speed_exponent: float = 3.0
 
     def resolve(self) -> tuple[dict, float, list[str]]:
         """-> ({fuel: tonnes}, distance_nm, notes)"""
@@ -66,8 +70,12 @@ class SpeedProfile:
                 raise ValueError(f"{name} must be positive")
         if self.sea_days <= 0:
             raise ValueError("sea_days must be positive")
+        lo, hi = SPEED_EXPONENT_RANGE
+        if not lo <= self.speed_exponent <= hi:
+            raise ValueError(f"speed exponent must be between {lo} and {hi}")
+        n = self.speed_exponent
         ratio = self.actual_speed_kn / self.ref_speed_kn
-        me_per_day = self.ref_cons_t_per_day * ratio ** 3
+        me_per_day = self.ref_cons_t_per_day * ratio ** n
         me_total = me_per_day * self.sea_days
         aux_total = (self.aux_t_per_day_at_sea * self.sea_days
                      + self.aux_t_per_day_in_port * self.port_days)
@@ -78,8 +86,8 @@ class SpeedProfile:
             fuels[self.aux_fuel] = fuels.get(self.aux_fuel, 0.0) + aux_total
         notes = [
             f"Fuel ESTIMATED from speed: {me_per_day:,.1f} t/day at "
-            f"{self.actual_speed_kn} kn (cube law from {self.ref_cons_t_per_day} "
-            f"t/day at {self.ref_speed_kn} kn) × {self.sea_days:g} sea days "
+            f"{self.actual_speed_kn} kn ({'cube law' if n == 3 else f'speed exponent {n:g}'} from "
+            f"{self.ref_cons_t_per_day} t/day at {self.ref_speed_kn} kn) × {self.sea_days:g} sea days "
             f"= {me_total:,.1f} t main engine.",
             f"Distance derived as speed × 24 × sea days = {distance:,.0f} nm; "
             "replace with logged distance when available.",
@@ -100,10 +108,11 @@ class CIIInput:
     distance_nm: float = 0.0
     # option 2: estimate from speed
     speed_profile: Optional[SpeedProfile] = None
-    # G5
+    # G5: either the summary form (CIICorrections) or the itemised MEPC.355(78) form (G5Input)
     corrections: Optional[CIICorrections] = None
     imo_number: str = ""
     vessel_name: str = ""
+    g5: Optional[G5Input] = None
 
 
 # --------------------------------------------------------------- results --
@@ -139,6 +148,7 @@ class CIIComputation:
     trajectory: list             # [YearPoint...] 2023-2030 at this performance
     estimated_inputs: bool       # True when fuel came from the speed model
     notes: list
+    g5_lines: list = field(default_factory=list)
 
 
 def _rating_for(ratio: float, dd) -> str:
@@ -188,6 +198,25 @@ def compute_cii_full(inp: CIIInput) -> CIIComputation:
 
     # --- G5 corrections, only from documented operator values ---
     corr = inp.corrections
+    if corr is not None and inp.g5 is not None:
+        raise ValueError("Give G5 corrections either as itemised MEPC.355(78) entries or as "
+                         "summary totals, not both.")
+    g5_lines: list = []
+    attained_for = None
+    if inp.g5 is not None:
+        dwt = inp.dwt or inp.gt
+        fuels0, dist0 = dict(fuels), distance
+        g = apply_g5(fuels0, dist0, inp.ship_type, dwt, inp.year, inp.g5)
+        co2_t = g.co2_numerator_t
+        distance = g.distance_nm
+        capacity *= g.denominator_factor
+        g5_lines = [vars(x) for x in g.lines]
+        notes.extend(g.notes)
+        cap0 = capacity
+
+        def attained_for(y: int) -> float:
+            gy = apply_g5(fuels0, dist0, inp.ship_type, dwt, y, inp.g5)
+            return (gy.co2_numerator_t * 1e6) / (cap0 * gy.distance_nm)
     if corr is not None:
         co2_t = max(0.0, co2_t - corr.excluded_co2_t)
         distance = max(1e-9, distance - corr.excluded_distance_nm)
@@ -233,7 +262,7 @@ def compute_cii_full(inp: CIIInput) -> CIIComputation:
     for y in sorted(Z_FACTORS):
         zy = Z_FACTORS[y]
         req_y = reference * (1 - zy / 100)
-        ry = attained / req_y
+        ry = (attained_for(y) if attained_for else attained) / req_y
         traj.append(YearPoint(y, zy, round(req_y, 3), _rating_for(ry, dd),
                               round(ry, 3)))
     worst = traj[-1]
@@ -262,4 +291,4 @@ def compute_cii_full(inp: CIIInput) -> CIIComputation:
         boundaries=bounds, gap_to_next_band_pct=gap,
         reduction_to_reach=reduction,
         trajectory=[vars(p) for p in traj],
-        estimated_inputs=estimated, notes=notes)
+        estimated_inputs=estimated, notes=notes, g5_lines=g5_lines)

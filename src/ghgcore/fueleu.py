@@ -2,10 +2,13 @@
 
 GHG intensity of energy used onboard (well-to-wake, gCO2e/MJ) vs declining
 targets from the 91.16 gCO2e/MJ 2020 baseline. Computes compliance balance,
-penalty exposure (Art. 23), and the tradable surplus value (pooling, Art. 21).
+penalty exposure (Art. 23, Annex IV Part B, with the Art. 23(2) multiplier for
+consecutive deficit periods), and what pooling the deficit would cost instead
+(Art. 21) at a price the user sets.
 
-Fuel WtW default intensities & LCVs below are APPROXIMATE working values for
-prototyping — production must use Annex II defaults / certified actual values.
+Applies from reporting period 2025 to ships above 5,000 GT carrying cargo or
+passengers (Art. 2). LCV and WtW values are the Annex II defaults (verified
+8 Jul 2026); certified values (Art. 10) override them.
 """
 from dataclasses import dataclass
 from typing import Optional
@@ -15,6 +18,15 @@ BASELINE_GCO2E_MJ = 91.16
 REDUCTIONS = {2025: 0.02, 2030: 0.06, 2035: 0.145, 2040: 0.31, 2045: 0.62, 2050: 0.80}
 PENALTY_EUR_PER_T_VLSFO_EQ = 2400.0
 VLSFO_ENERGY_MJ_PER_T = 41_000.0
+FUELEU_FIRST_YEAR = 2025
+MAX_CONSECUTIVE_YEARS = 20
+
+
+def penalty_multiplier(consecutive_deficit_years: int) -> float:
+    """Art. 23(2): penalty x (1 + (n - 1)/10), n = consecutive reporting periods with a
+    FuelEU penalty for the ship, this one included. Resets after a compliant period."""
+    n = max(1, min(MAX_CONSECUTIVE_YEARS, int(consecutive_deficit_years or 1)))
+    return 1.0 + (n - 1) / 10.0
 
 # (LCV MJ per tonne, WtW gCO2e/MJ). Verified 8 Jul 2026 against Reg. (EU)
 # 2023/1805 Annex II default emission factors (EUR-Lex CELEX 32023R1805,
@@ -78,9 +90,14 @@ class FuelEUResult:
     energy_mj: float              # EU-scoped energy
     compliance_balance_gco2e: float   # + surplus / - deficit
     compliance_balance_tco2e: float
-    penalty_eur: float            # if deficit and unpooled/unbanked
+    penalty_eur: float            # statutory penalty if the deficit is neither pooled nor borrowed
     surplus_value_note: str
     notes: list[str]
+    applicable: bool = True
+    penalty_multiplier: float = 1.0
+    penalty_eur_per_tco2e: float = 0.0          # statutory cost of one tCO2e of deficit
+    pool_price_eur_per_tco2e: Optional[float] = None
+    pooling_cost_eur: Optional[float] = None    # deficit bought from a pool at that price
 
 
 def _scope_share(scope: VoyageScope) -> float:
@@ -88,8 +105,15 @@ def _scope_share(scope: VoyageScope) -> float:
             VoyageScope.EXTRA_EEA: 0.5, VoyageScope.OUT_OF_SCOPE: 0.0}[scope]
 
 
+def _not_applicable(activity: AnnualActivity, reason: str, notes: list[str]) -> FuelEUResult:
+    return FuelEUResult(0, round(target_intensity(activity.year), 2), 0, 0, 0, 0,
+                        reason, notes + [reason], applicable=False)
+
+
 def compute_fueleu(activity: AnnualActivity,
-                   certified_props: Optional[dict] = None) -> FuelEUResult:
+                   certified_props: Optional[dict] = None,
+                   consecutive_deficit_years: int = 1,
+                   pool_price_eur_per_tco2e: Optional[float] = None) -> FuelEUResult:
     """certified_props: {FuelType: (lcv_mj_per_t, wtw_gco2e_per_mj)} — actual
     certified values per Art. 10(4)/(5) (e.g. from the biofuel's BDN/PoS);
     they override the Annex II defaults for this computation."""
@@ -99,6 +123,15 @@ def compute_fueleu(activity: AnnualActivity,
     if certified_props:
         notes.append(f"Certified values supplied for: "
                      f"{', '.join(f.value for f in certified_props)} (Art. 10).")
+    if activity.year < FUELEU_FIRST_YEAR:
+        return _not_applicable(activity, f"FuelEU Maritime applies from 1 January {FUELEU_FIRST_YEAR}, "
+                                         f"so {activity.year} carries no FuelEU obligation.", notes)
+    if activity.ets_calibration == 0:
+        return _not_applicable(activity, "Not in FuelEU scope on the public record: the verifier reported "
+                                         "no EU ETS-scope emissions for this ship. FuelEU covers ships above "
+                                         "5,000 GT carrying cargo or passengers, the same ships the maritime "
+                                         "ETS covers, so this ship is most likely smaller, an offshore ship, "
+                                         "or exempt. Check its gross tonnage.", notes)
     energy = 0.0
     emissions = 0.0  # gCO2e
     for leg in activity.legs:
@@ -112,29 +145,49 @@ def compute_fueleu(activity: AnnualActivity,
             emissions += e * wtw
 
     if energy == 0:
-        return FuelEUResult(0, target_intensity(activity.year), 0, 0, 0, 0,
-                            "No EU-scoped energy — FuelEU not applicable this year.", notes)
+        return _not_applicable(activity, "No energy used on EU-scope voyages or at EU berths, so "
+                                         "FuelEU does not apply this year.", notes)
 
     intensity = emissions / energy
     tgt = target_intensity(activity.year)
     cb_g = (tgt - intensity) * energy          # Annex IV: CB = (target - actual) x energy
     cb_t = cb_g / 1e6
+    per_t = penalty_per_tco2e(intensity)
+    mult = penalty_multiplier(consecutive_deficit_years)
 
-    penalty = 0.0
+    penalty, pool_cost = 0.0, None
     if cb_g < 0:
-        # Art. 23: penalty = |CB| / (GHGIEactual x 41,000) x 2,400 EUR
-        penalty = abs(cb_g) / (intensity * VLSFO_ENERGY_MJ_PER_T) * PENALTY_EUR_PER_T_VLSFO_EQ
+        # Annex IV Part B: |CB| / (GHGIE_actual x 41,000) x EUR 2,400; Art. 23(2) multiplier
+        penalty = penalty_equiv(cb_g, intensity) * mult
+        if mult > 1:
+            notes.append(f"Penalty multiplied by {mult:g} for {int(consecutive_deficit_years)} consecutive "
+                         f"periods with a FuelEU penalty (Art. 23(2): 1 + (n - 1)/10).")
+        if pool_price_eur_per_tco2e is not None:
+            pool_cost = abs(cb_t) * pool_price_eur_per_tco2e
+            notes.append(f"Pooling instead: {abs(cb_t):,.1f} tCO₂e bought at €{pool_price_eur_per_tco2e:,.0f} "
+                         f"per tonne is €{pool_cost:,.0f}, against a statutory €{per_t * mult:,.0f} per tonne. "
+                         f"Pool prices are negotiated; check yours.")
 
     if cb_t > 0:
         val = ("A surplus can be banked (Article 20) or pooled (Article 21). Its market value is "
                "negotiated and cannot exceed the penalty the other party avoids "
                f"(≈€{penalty_equiv(cb_g, intensity):,.0f} if they paid instead).")
     else:
-        val = "A deficit can be pooled with a surplus ship, borrowed from next year (with 10% added), or paid as a penalty."
+        val = ("A deficit can be pooled with a surplus ship (Article 21), part-borrowed from next "
+               "year with 10% added (Article 20), or paid as a penalty.")
 
     return FuelEUResult(round(intensity, 2), round(tgt, 2), round(energy, 0),
-                        round(cb_g, 0), round(cb_t, 1), round(penalty, 0), val, notes)
+                        round(cb_g, 0), round(cb_t, 1), round(penalty, 0), val, notes,
+                        applicable=True, penalty_multiplier=mult,
+                        penalty_eur_per_tco2e=round(per_t, 2),
+                        pool_price_eur_per_tco2e=pool_price_eur_per_tco2e,
+                        pooling_cost_eur=None if pool_cost is None else round(pool_cost, 0))
 
 
 def penalty_equiv(cb_g: float, intensity: float) -> float:
     return abs(cb_g) / (intensity * VLSFO_ENERGY_MJ_PER_T) * PENALTY_EUR_PER_T_VLSFO_EQ
+
+
+def penalty_per_tco2e(intensity: float) -> float:
+    """Statutory penalty per tonne CO2e of deficit at this intensity (before Art. 23(2))."""
+    return 1e6 / (intensity * VLSFO_ENERGY_MJ_PER_T) * PENALTY_EUR_PER_T_VLSFO_EQ if intensity else 0.0

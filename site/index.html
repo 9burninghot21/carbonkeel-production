@@ -3,9 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="index, follow">
 <title>CarbonKeel — what carbon costs your ships</title>
-<meta name="description" content="See what EU ETS, FuelEU and CII cost your ships, in euros. Free check from verified public data. No account.">
+<meta name="description" content="See what EU ETS, UK ETS, FuelEU Maritime and CII cost your ships, in euros, from the verified emissions EMSA publishes. Pool prices, charter splits and a downloadable report. Free, no account.">
+<link rel="canonical" href="https://carbonkeel.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://carbonkeel.com/">
+<meta property="og:title" content="CarbonKeel — what carbon costs your ships">
+<meta property="og:description" content="EU ETS, UK ETS, FuelEU Maritime and CII for any ship trading into Europe, in euros, from verified public data.">
+<meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#0b2545">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
 <style>
@@ -67,7 +73,7 @@
   #prog svg{position:absolute;top:-17px;width:34px;height:20px;
     left:calc(var(--prog,0)*(100% - 34px))}
 
-  #devnote{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:9990;max-width:min(560px,92vw);
+  #devnote{display:none;
     background:#0b2545;color:#fff;border-radius:14px;padding:14px 18px;font-size:14.5px;line-height:1.5;
     box-shadow:0 14px 40px rgba(0,0,0,.35)}
   #devnote[hidden]{display:none}
@@ -525,10 +531,6 @@
   </defs>
 </svg>
 
-<div id="devnote" hidden role="status">
-  <b>The app is not running yet.</b> Double-click <b>Start CarbonKeel.bat</b> in the
-  ghg-platform folder, then reload this page. <button type="button" id="devclose">Dismiss</button>
-</div>
 
 <header id="hdr">
   <div class="wrap">
@@ -541,6 +543,7 @@
       <a class="txt" href="#how">How it works</a>
       <a class="txt" href="#services">What we do</a>
       <a class="txt" href="#best">Why CarbonKeel</a>
+      <a class="txt" href="/app#cii">Use your own data</a>
       <a class="txt" href="#talk">Talk to us</a>
       <a class="go sm" href="/app">Check a ship</a>
     </nav>
@@ -588,10 +591,11 @@
       <div class="stat" data-reveal style="--d:0"><b class="count" data-count="16673">16,673</b><span>ships in the public register</span></div>
       <div class="stat" data-reveal style="--d:120"><b class="count" data-count="4047">4,047</b><span>shipping companies behind them</span></div>
       <div class="stat" data-reveal style="--d:240"><b class="count" data-count="87.3" data-dec="1" data-suf=" Mt">87.3 Mt</b><span>of CO₂ in EU ETS scope, one year</span></div>
-      <div class="stat" data-reveal style="--d:360"><b class="count" data-count="6.1" data-dec="1" data-pre="€" data-suf=" bn">€6.1 bn</b><span>a year at €70 a tonne <i class="tag">ESTIMATE</i></span></div>
+      <div class="stat" data-reveal style="--d:360"><b class="count" data-count="7.4" data-dec="1" data-pre="€" data-suf=" bn">€7.4 bn</b><span>a year at €85 a tonne <i class="tag">ESTIMATE</i></span></div>
     </div>
     <p class="src">Source: EMSA THETIS-MRV public register, published under Article 21 of Regulation (EU) 2015/757.
-       Euro figure = verifier-reported ETS-scope CO₂ × an assumed €70 per allowance.</p>
+       Euro figure = verifier-reported ETS-scope CO₂ × an assumed €85 per allowance (close to the September 2026
+       market average), at the full rate that applies from 2026.</p>
   </div>
 </section>
 <svg class="div" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true" style="background:#05497a">
@@ -628,8 +632,8 @@
           <span class="ex">ILLUSTRATION</span></div>
         <div class="mets">
           <div class="met"><div class="lbl">Carbon cost, one year</div>
-            <div class="val"><span class="count" data-count="511" data-pre="€" data-suf="k">€511k</span></div>
-            <div class="fine">EU ETS €363k + FuelEU €148k</div></div>
+            <div class="val"><span class="count" data-count="589" data-pre="€" data-suf="k">€589k</span></div>
+            <div class="fine">EU ETS €441k + FuelEU €148k, or about €466k with the FuelEU shortfall pooled</div></div>
           <div class="met"><div class="lbl">CII rating</div><div class="val" style="color:#c2410c">D</div>
             <div class="fine">5.36 against a 5.05 limit</div></div>
           <div class="met"><div class="lbl">EEXI</div><div class="val" style="color:#0f8f63">Pass</div>
@@ -655,8 +659,8 @@
         <div class="drv" data-reveal="r" style="--d:240"><i>↘</i><div><h3>A rating that slips on its own</h3>
           <p>The CII limit tightens every year. The ship on the left goes from C to E by 2030.</p></div></div>
         <div class="avg" data-reveal style="--d:300">
-          <b class="count" data-count="367" data-pre="€" data-suf="k">€367k</b>
-          <span>average per ship across the register, a year, at €70 a tonne (ESTIMATE)</span>
+          <b class="count" data-count="445" data-pre="€" data-suf="k">€445k</b>
+          <span>average EU ETS cost per ship across the register, a year, at €85 a tonne and the full 2026 rate (ESTIMATE)</span>
         </div>
         <div class="ways">
           <a class="go" href="#talk">Talk to us about your fleet</a>
@@ -670,23 +674,24 @@
         <span class="ex">MODELLED EXAMPLE, NOT A MEASURED RESULT</span></div>
       <ol class="steps">
         <li class="o" data-reveal style="--d:0"><b>Observation</b>
-          <p>&euro;511k carbon bill for 2025 emissions. EU ETS is 71% of it, and FuelEU adds a &euro;148k penalty.</p></li>
+          <p>&euro;589k carbon bill for 2025 emissions. EU ETS is 75% of it, and FuelEU adds a &euro;148k penalty.</p></li>
         <li class="w" data-reveal style="--d:140"><b>Why</b>
           <p>Heavy fuel oil emits 91.74 gCO<sub>2</sub>e/MJ against a FuelEU limit of 89.34. The share of EU emissions
              surrendered also rises from 70% to 100% in 2026.</p></li>
         <li class="i" data-reveal style="--d:280"><b>Impact</b>
-          <p>&euro;511k now; about <b>&euro;666k a year</b> on the 2026 rules.</p></li>
+          <p>&euro;589k now; about <b>&euro;778k a year</b> on the 2026 rules. Buying the FuelEU shortfall from a pool
+             instead of paying the penalty takes about &euro;122k off.</p></li>
         <li class="a" data-reveal style="--d:420"><b>Action</b>
           <p>Replace 20% of fuel energy with certified biofuel on EU voyages and sail 10% slower.</p></li>
         <li class="v" data-reveal style="--d:560"><b>Expected value</b>
-          <p>Up to <b>&euro;276k a year</b> of carbon cost avoided, before the cost of the biofuel itself.</p></li>
+          <p>Up to <b>&euro;299k a year</b> of carbon cost avoided, before the cost of the biofuel itself.</p></li>
       </ol>
       <div class="ba" data-reveal style="--d:700">
-        <div class="c"><small>Before</small><b>&euro;511k</b></div>
+        <div class="c"><small>Before</small><b>&euro;589k</b></div>
         <div class="ar">20% biofuel, 10% slower &rarr;</div>
-        <div class="c"><small>After</small><b>&euro;235k</b></div>
-        <div class="chg">&minus;54%</div>
-        <div class="fine">Carbon cost falls by &euro;276k a year and EU-scope CO<sub>2</sub>e by 35%. The FuelEU deficit becomes a
+        <div class="c"><small>After</small><b>&euro;289k</b></div>
+        <div class="chg">&minus;51%</div>
+        <div class="fine">Carbon cost falls by &euro;299k a year and EU-scope CO<sub>2</sub>e by 34%. The FuelEU deficit becomes a
           surplus. Modelled from the ship&rsquo;s public figures, not measured; it excludes the cost of the biofuel and any
           effect on voyage time.</div>
       </div>
@@ -911,7 +916,7 @@
         <div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
         <h3>Your data stays yours</h3>
         <p>Nothing to upload to start. No cookies or tracking. Operators can switch our figures off for their ships.</p>
-        <span class="proof">Not search-indexed</span>
+        <span class="proof">Ship results are not search-indexed</span>
       </div>
     </div>
   </div>
@@ -973,10 +978,21 @@
         </div>
       </details>
       <details>
+        <summary>Who is behind CarbonKeel, and what it is not</summary>
+        <div class="body">
+          <p>CarbonKeel is built and run by <b>Prayag Raviprakash</b>, based in India. It is independent: not
+             affiliated with EMSA, the European Commission, the IMO, a classification society or a fuel supplier.</p>
+          <p>It is <b>not an accredited MRV or FuelEU verifier</b>. Allowances are surrendered, and FuelEU balances
+             settled, on the figures your verifier accepts. Use CarbonKeel to plan, budget and check; every number shows
+             its source, and the full method is published so your verifier can follow it.</p>
+          <p>Questions, corrections or a review of your fleet: <a href="mailto:hello@carbonkeel.com">hello@carbonkeel.com</a>.</p>
+        </div>
+      </details>
+      <details>
         <summary>Your data stays yours</summary>
         <div class="body">
           <p>If you operate a ship and would rather our figures about it were not shown to anyone else, one click switches them
-             off. Nothing here is search-indexed.</p>
+             off. Results for individual ships are not search-indexed.</p>
         </div>
       </details>
     </div>
@@ -986,9 +1002,10 @@
 <!-- ============================ TALK ============================ -->
 <section class="talksec" id="talk">
   <div class="wrap">
-    <span class="kicker" data-reveal>Talk to someone</span>
-    <h2 data-reveal style="--d:80">A person, not a form.</h2>
-    <p class="lede" data-reveal style="--d:160">There is one person behind this. Ask anything, including whether this is worth your time.</p>
+    <span class="kicker" data-reveal>Talk to us</span>
+    <h2 data-reveal style="--d:80">Ask the person who built it.</h2>
+    <p class="lede" data-reveal style="--d:160">CarbonKeel is run by its founder, Prayag Raviprakash, who answers every message
+       personally. Ask anything about a number, the method, or whether this is worth your time.</p>
 
     <div class="talk" data-reveal>
       <h3>Send us your fleet and we will work out what it costs</h3>
@@ -1037,12 +1054,15 @@
 
   <footer class="f">
     <div class="wrap">
-      <p><span class="n">CarbonKeel</span> — Maritime compliance, decoded.</p>
-      <p style="margin-top:10px"><strong>Built by:</strong> Maritime software engineers and naval architects. Verified against primary EU ETS (Directive 2003/87/EC), UK ETS (SI 2026/392), FuelEU Maritime (Reg. 2023/1805), and IMO CII (Reg.28) regulatory texts.</p>
+      <p><span class="n">CarbonKeel</span> — what carbon costs your ships.</p>
+      <p style="margin-top:10px">Operated by Prayag Raviprakash, India. Calculations follow Directive 2003/87/EC (EU ETS),
+         SI 2026/392 (UK ETS), Regulation (EU) 2023/1805 (FuelEU Maritime) and MARPOL Annex VI (CII and EEXI), with
+         every parameter cited in the published method. CarbonKeel is independent and is not an accredited verifier.</p>
       <p style="margin-top:10px">Figures rebuilt from the EU MRV register are estimates and are labelled as such. Contains data from EMSA
          THETIS-MRV, published under Article 21 of Regulation (EU) 2015/757. Our calculations are our own and are not
          endorsed by EMSA or the European Commission. Operators can ask for our derived figures to be withheld
-         from third parties. Not search-indexed. Not legal or investment advice. The example above is an illustration, not a real
+         from third parties. Ship results are not search-indexed. Allowance and pool prices are assumptions. Not legal or
+         investment advice. The example above is an illustration, not a real
          ship’s filing.</p>
       <p style="margin-top:14px"><a href="mailto:hello@carbonkeel.com">hello@carbonkeel.com</a> ·
         <a href="/privacy">Privacy notice</a> · <a href="/">Back to home</a></p>
@@ -1051,25 +1071,6 @@
 </section>
 
 <script>
-  /* The app lives at app.carbonkeel.com in production. Until that is registered
-     and deployed, every link points at the local server so the journey is clickable. */
-  var LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-           || location.protocol === 'file:';
-  var APP = LOCAL ? 'http://127.0.0.1:8000' : 'https://app.carbonkeel.com';
-  if (LOCAL) {
-    document.querySelectorAll('a[href^="https://app.carbonkeel.com"]').forEach(function (a) {
-      a.href = a.href.replace('https://app.carbonkeel.com', APP); });
-    document.querySelectorAll('form[action^="https://app.carbonkeel.com"]').forEach(function (f) {
-      f.action = APP; });
-    /* If the app is not up, say so plainly instead of leaving a dead search box. */
-    var probe = new AbortController();
-    setTimeout(function () { probe.abort(); }, 2500);
-    fetch(APP + '/healthz', {mode: 'no-cors', signal: probe.signal}).catch(function () {
-      var n = document.getElementById('devnote'); if (n) n.hidden = false; });
-    document.getElementById('devclose').onclick = function () {
-      document.getElementById('devnote').hidden = true; };
-  }
-
   /* The logo is home: back to the top of the opening page. */
   function goHome(e) {
     e.preventDefault();
@@ -1549,7 +1550,7 @@
         vship = document.getElementById('voyShip'),
         steps = [].slice.call(document.querySelectorAll('.vstep')),
         bars = [].slice.call(document.querySelectorAll('#stepper i')),
-        spy = [].slice.call(document.querySelectorAll('nav.main a.txt')),
+        spy = [].slice.call(document.querySelectorAll('nav.main a.txt[href^="#"]')),
         spyTargets = spy.map(function (a) { return document.querySelector(a.getAttribute('href')); }),
         len = route.getTotalLength(),
         pins = [],
@@ -1747,7 +1748,7 @@
 <div class="ck-chat" id="ckChat" role="dialog" aria-label="Talk to CarbonKeel" hidden>
   <div class="ck-head">
     <b>Talk to us</b>
-    <span>One person, not a bot. Usually replies the same day.</span>
+    <span>Prayag Raviprakash, founder, answers every message personally, usually within one working day.</span>
   </div>
   <div class="ck-body">
     <div class="ck-msg">Hello. Tell me what you need and I will come back to you myself. <b>What is this about?</b></div>

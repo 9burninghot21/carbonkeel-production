@@ -1,7 +1,9 @@
 """IMO Net-Zero Framework scenario engine (draft Chapter 5, MARPOL Annex VI).
 
-STATUS: approved in principle at MEPC 83 (Apr 2025); adoption adjourned to
-~Oct 2026. All parameters are configurable because the final text may change.
+STATUS: approved in principle at MEPC 83 (Apr 2025); on 17 Oct 2025 the extraordinary
+session voted to adjourn adoption for one year. Not adopted as of 17 Oct 2026 (re-check
+imo.org; reported dates for the vote differ). All parameters are configurable because the
+final text may change.
 
 Mechanics (as approved): GFI (well-to-wake gCO2e/MJ) vs two declining targets
 from the 93.3 gCO2e/MJ 2008 reference:
@@ -24,6 +26,9 @@ DIRECT_TARGET = {2028: 17, 2029: 19, 2030: 21, 2031: 25.4, 2032: 29.8,
 RU_TIER1_USD = 100.0
 RU_TIER2_USD = 380.0
 
+NZF_STATUS = ("Not adopted. The IMO postponed the adoption decision by one year in "
+              "October 2025; the vote is due in late 2026.")
+
 
 @dataclass
 class NZFResult:
@@ -43,8 +48,7 @@ def compute_nzf(activity: AnnualActivity, scenario_year: int = 2028) -> NZFResul
 
     NZF scope = ALL international energy (not just EU) — we include every leg.
     """
-    notes = ["The IMO Net-Zero Framework (NZF) has not been adopted. This is a scenario only; "
-             "the adoption vote is expected in October 2026.",
+    notes = ["IMO Net-Zero Framework (NZF): scenario only. " + NZF_STATUS,
              "Well-to-wake fuel values here are provisional defaults. The final regime will use the "
              "IMO life-cycle assessment guidelines (MEPC.391(81))."]
     energy = 0.0

@@ -1,0 +1,23 @@
+# Only what the server needs goes into the image. Personal documents, git history,
+# outreach working files and request logs stay on this machine.
+.git
+.gitignore
+.arena
+Claude outputs
+outreach
+docs/walkthrough
+scripts/walkthrough
+data/privacy/requests.jsonl
+data/access_keys.txt
+**/__pycache__
+**/*.pyc
+.venv
+venv
+.env
+.env.*
+*.docx
+*CV*.pdf
+*cv*.pdf
+*resume*
+*passport*
+Start CarbonKeel.bat

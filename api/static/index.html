@@ -306,17 +306,23 @@
     .cal-item > span:last-child { flex-basis: 100%; }
     .cal-date, .cal-regime { min-width: 0; }
   }
+  @media print {
+    .topbar, .ck-fab, .ck-chat, footer, .noprint, body::before { display: none !important; }
+    body { background: #fff; }
+    .card { box-shadow: none; border-color: #cbd5e1; }
+    body.print-calc .wrap > :not(#tab-cii) { display: none !important; }
+    body.print-calc #ciiApp > :not(#ciiOut) { display: none !important; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div class="logo" onclick="goHome()" title="Back to the start"
-         role="link" tabindex="0" onkeydown="if(event.key==='Enter')goHome()"><svg viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="9" fill="#0b2545"/><path d="M7 21h20l-3.5 5.5h-13z" fill="#2dd4bf"/><path d="M12 21v-6h10v6" fill="#fff"/><path d="M17 7.5v7.5" stroke="#ffb703" stroke-width="2.2" stroke-linecap="round"/></svg><span style="color:inherit">Carbon<span>Keel</span></span></div>
+    <a class="logo" href="/" title="CarbonKeel home" style="text-decoration:none"><svg viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="9" fill="#0b2545"/><path d="M7 21h20l-3.5 5.5h-13z" fill="#2dd4bf"/><path d="M12 21v-6h10v6" fill="#fff"/><path d="M17 7.5v7.5" stroke="#ffb703" stroke-width="2.2" stroke-linecap="round"/></svg><span style="color:inherit">Carbon<span>Keel</span></span></a>
     <nav>
       <button id="nav-vessel" class="on" onclick="showTab('vessel')">Check a ship</button>
       <button id="nav-eexi" onclick="showTab('eexi')">EEXI<span class="free">FREE</span></button>
-      <button id="nav-cii" onclick="showTab('cii')">CII calculator<span class="lock">operators</span></button>
+      <button id="nav-cii" onclick="showTab('cii')">Your-data calculator<span class="lock" id="ciiLockTag" style="display:none">key</span></button>
       <button id="nav-fleet" onclick="showTab('fleet')">My fleet</button>
       <button id="nav-cal" onclick="showTab('cal')">Calendar</button>
       <button id="nav-method" onclick="showTab('method')">Method</button>
@@ -331,8 +337,9 @@
   <!-- ============ VESSEL ============ -->
   <div id="tab-vessel" class="tab on">
     <h1>What is this ship&rsquo;s carbon bill?</h1>
-    <p class="sub">EU ETS, FuelEU, UK ETS and the IMO Net-Zero Framework, in euros. Free,
-       from verified public data. Add the ship&rsquo;s capacity to see its CII rating.</p>
+    <p class="sub">EU ETS, FuelEU, UK ETS and the IMO Net-Zero Framework, in euros, from the
+       verified emissions EMSA publishes. Add the ship&rsquo;s deadweight for its CII rating and EEXI.
+       Set your own allowance and pool prices, split the bill with a charterer, and download the report.</p>
     <div class="card">
       <div class="searchbox">
         <input id="q" placeholder="Ship name or IMO number" autocomplete="off">
@@ -431,18 +438,15 @@
     <div id="eout"></div>
   </div>
 
-  <!-- ============ CII CALCULATOR (locked) ============ -->
+  <!-- ============ YOUR-DATA CALCULATOR ============ -->
   <div id="tab-cii" class="tab">
-    <div id="ciiLocked">
-      <h1>CII calculator for ship operators</h1>
-      <p class="sub">Work out a ship&rsquo;s Carbon Intensity Indicator (CII) from your own fuel and
-         distance figures. It applies the full IMO rule set (G1&ndash;G5), gives the A&ndash;E rating
-         and shows where that rating goes as the targets tighten to 2030. These are your
-         numbers, not an estimate from public data.</p>
+    <div id="ciiLocked" style="display:none">
+      <h1>Your-data calculator</h1>
       <div class="card">
         <b style="font-size:14px">Enter your access key</b>
-        <p class="sub" style="margin:6px 0 12px">We give a key to ship operators and design
-           partners. Just ask. It is remembered on this device.</p>
+        <p class="sub" style="margin:6px 0 12px">Access to this tool is limited at the moment. Email
+           <a href="mailto:hello@carbonkeel.com?subject=CarbonKeel%20calculator%20access">hello@carbonkeel.com</a>
+           for a key. It is remembered on this device.</p>
         <div class="row">
           <input id="ciiKey" placeholder="ck-…" autocomplete="off">
           <button class="cta" onclick="unlockCii()">Unlock</button>
@@ -451,12 +455,14 @@
       </div>
     </div>
 
-    <div id="ciiApp" style="display:none">
-      <h1>CII calculator <span class="dim" id="ciiWho"></span></h1>
-      <p class="sub">G1 attained value, G2 reference line, G3 required value, G4 rating and
-         G5 corrections. Based on your own data, not a public-data estimate.</p>
+    <div id="ciiApp">
+      <h1>Your-data calculator <span class="dim" id="ciiWho"></span></h1>
+      <p class="sub">Your own fuel and distance in; the CII rating (IMO G1 to G5) and the EU ETS, UK ETS
+         and FuelEU bill out, split by where the fuel was burned. Figures you type are used to work out
+         the answer and are not stored.</p>
 
       <div class="card">
+        <div style="display:flex;justify-content:flex-end"><button class="ghost" onclick="fillCiiExample()">Try an example ▸</button></div>
         <div class="step"><span class="stepn">1</span> Ship</div>
         <div class="chips" id="ciiTypeChips">
           <button data-v="bulk_carrier" class="on">Bulk carrier</button>
@@ -473,18 +479,32 @@
           <button data-v="vehicle_carrier">Vehicle carrier</button>
         </div>
         <div class="row" style="margin-top:10px">
-          <input id="ciiName" placeholder="Ship name (optional)">
-          <input id="ciiImo" placeholder="IMO (optional)">
-          <input id="ciiCap" type="number" placeholder="Deadweight (DWT)">
-          <input id="ciiGt" type="number" placeholder="GT (ro-ro, ro-pax, cruise, vehicle carrier)">
-          <select id="ciiYear">
+          <input id="ciiName" placeholder="Ship name (optional)" maxlength="120">
+          <input id="ciiImo" placeholder="IMO (optional)" maxlength="20">
+          <input id="ciiCap" type="number" min="0" placeholder="Deadweight (DWT)">
+          <input id="ciiGt" type="number" min="0" placeholder="GT (ro-ro, ro-pax, cruise, vehicle carrier)">
+          <select id="ciiYear" aria-label="Year">
             <option>2023</option><option>2024</option><option>2025</option>
             <option selected>2026</option><option>2027</option><option>2028</option>
             <option>2029</option><option>2030</option>
           </select>
         </div>
+        <div class="row" style="margin-top:8px">
+          <label class="dim" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px">Ice class
+            <select id="ciiIce">
+              <option value="">None</option><option value="IA Super">IA Super</option>
+              <option value="IA">IA</option><option value="other">Another ice class</option>
+            </select></label>
+          <label class="dim" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px">Main engine (only matters for LNG)
+            <select id="ciiEngine">
+              <option value="otto_medium_speed">Dual-fuel Otto, medium speed (3.1% slip)</option>
+              <option value="otto_slow_speed">Dual-fuel Otto, slow speed (1.7%)</option>
+              <option value="diesel_dual_fuel">Dual-fuel Diesel (0.2%)</option>
+              <option value="lbsi">Lean-burn spark-ignited (2.6%)</option>
+            </select></label>
+        </div>
 
-        <div class="step"><span class="stepn">2</span> How do you want to give the fuel consumption?</div>
+        <div class="step"><span class="stepn">2</span> Fuel burned in the year</div>
         <div class="modecards">
           <div id="ciiModeFuel" class="modecard on" onclick="setCiiMode('fuel')">
             <b>Actual fuel burned</b>
@@ -492,65 +512,92 @@
           </div>
           <div id="ciiModeSpeed" class="modecard" onclick="setCiiMode('speed')">
             <b>Estimate from speed</b>
-            <span class="dim">from speed, using the cube law from a known consumption point</span>
+            <span class="dim">from a known consumption point, main engine and auxiliaries apart</span>
           </div>
         </div>
 
         <div id="ciiFuelInputs">
           <div class="fuelgrid">
-            <div><label>HFO (t)</label><input id="f_hfo" type="number" step="0.1" placeholder="0"></div>
-            <div><label>VLSFO / LFO (t)</label><input id="f_lfo" type="number" step="0.1" placeholder="0"></div>
-            <div><label>MDO / MGO (t)</label><input id="f_mdo_mgo" type="number" step="0.1" placeholder="0"></div>
-            <div><label>LNG (t)</label><input id="f_lng" type="number" step="0.1" placeholder="0"></div>
-            <div><label>Methanol (t)</label><input id="f_methanol" type="number" step="0.1" placeholder="0"></div>
-            <div><label>B100 biofuel (t)</label><input id="f_biofuel_b100" type="number" step="0.1" placeholder="0"></div>
+            <div><label for="f_hfo">HFO (t)</label><input id="f_hfo" type="number" min="0" step="0.1" placeholder="0"></div>
+            <div><label for="f_lfo">VLSFO / LFO (t)</label><input id="f_lfo" type="number" min="0" step="0.1" placeholder="0"></div>
+            <div><label for="f_mdo_mgo">MDO / MGO (t)</label><input id="f_mdo_mgo" type="number" min="0" step="0.1" placeholder="0"></div>
+            <div><label for="f_lng">LNG (t)</label><input id="f_lng" type="number" min="0" step="0.1" placeholder="0"></div>
+            <div><label for="f_methanol">Methanol (t)</label><input id="f_methanol" type="number" min="0" step="0.1" placeholder="0"></div>
+            <div><label for="f_biofuel_b100">B100 biofuel (t)</label><input id="f_biofuel_b100" type="number" min="0" step="0.1" placeholder="0"></div>
           </div>
           <div class="row" style="margin-top:10px">
-            <input id="ciiDist" type="number" placeholder="Distance sailed (nm) — required">
+            <input id="ciiDist" type="number" min="0" placeholder="Distance sailed (nm), required" aria-label="Distance sailed in nautical miles">
           </div>
         </div>
 
         <div id="ciiSpeedInputs" style="display:none">
           <div class="row">
-            <input id="sp_ref_cons" type="number" step="0.1" placeholder="Reference consumption (t/day)">
-            <input id="sp_ref_speed" type="number" step="0.1" placeholder="at reference speed (kn)">
+            <input id="sp_ref_cons" type="number" min="0" step="0.1" placeholder="Main-engine reference consumption (t/day)">
+            <input id="sp_ref_speed" type="number" min="0" step="0.1" placeholder="at reference speed (kn)">
           </div>
           <div class="row" style="margin-top:8px">
-            <input id="sp_speed" type="number" step="0.1" placeholder="Actual average speed (kn)">
-            <input id="sp_sea_days" type="number" step="0.1" placeholder="Days at sea">
+            <input id="sp_speed" type="number" min="0" step="0.1" placeholder="Actual average speed (kn)">
+            <input id="sp_sea_days" type="number" min="0" step="0.1" placeholder="Days at sea">
+            <label class="dim" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px">Speed exponent n
+              <input id="sp_exp" type="number" min="2" max="4.5" step="0.1" value="3"></label>
           </div>
           <div class="row" style="margin-top:8px">
-            <input id="sp_aux_sea" type="number" step="0.1" placeholder="Auxiliary and boiler fuel at sea (t/day)">
-            <input id="sp_port_days" type="number" step="0.1" placeholder="Days in port">
-            <input id="sp_aux_port" type="number" step="0.1" placeholder="Auxiliary fuel in port (t/day)">
+            <input id="sp_aux_sea" type="number" min="0" step="0.1" placeholder="Auxiliaries and boilers at sea (t/day)">
+            <input id="sp_port_days" type="number" min="0" step="0.1" placeholder="Days in port">
+            <input id="sp_aux_port" type="number" min="0" step="0.1" placeholder="Auxiliaries and boilers in port (t/day)">
           </div>
-          <p class="dim" style="font-size:12.5px;margin-top:8px">Main-engine consumption
-             scales with the cube of the speed ratio against your reference point
-             (a sea-trial curve or the charter-party description). Distance is worked out as
-             speed × 24 × days at sea, unless you enter a logged distance below.</p>
-          <div class="row"><input id="ciiDist2" type="number" placeholder="Logged distance (nm) — optional"></div>
+          <p class="dim" style="font-size:12.5px;margin-top:8px">Main-engine consumption per day scales with
+             (speed ÷ reference speed)<sup>n</sup>. n = 3 is the cube law; ships with an engine or shaft power
+             limitation, or a modern hull, often sit between about 2.6 and 3.5, so use the exponent from your
+             own speed-consumption curve. Auxiliary, boiler, reefer and hotel load is entered separately per day
+             and does not scale with speed. Distance is speed × 24 × days at sea unless you enter a logged distance.</p>
+          <div class="row"><input id="ciiDist2" type="number" min="0" placeholder="Logged distance (nm), optional"></div>
         </div>
 
-        <details class="whatif" style="margin-top:16px">
+        <div class="step"><span class="stepn">3</span> Where was the fuel burned? <span class="dim" style="font-weight:500">(for the EU ETS, UK ETS and FuelEU bill)</span></div>
+        <p class="dim" style="font-size:12.5px;margin:0 0 8px">Share of the year&rsquo;s fuel, by mass. Each share is charged by its own rule:
+           voyages between EU/EEA ports and EU berths at 100%, voyages into or out of the EU/EEA at 50%, UK domestic voyages
+           and UK berths at 100% of the UK scheme, Great Britain to Northern Ireland at 50%. The rest is out of scope.</p>
+        <div class="fuelgrid">
+          <div><label for="sc_intra">Between EU/EEA ports, %</label><input id="sc_intra" class="scp" type="number" min="0" max="100" step="1" placeholder="0"></div>
+          <div><label for="sc_extra">Into or out of the EU/EEA, %</label><input id="sc_extra" class="scp" type="number" min="0" max="100" step="1" placeholder="0"></div>
+          <div><label for="sc_berth">At berth in EU/EEA ports, %</label><input id="sc_berth" class="scp" type="number" min="0" max="100" step="1" placeholder="0"></div>
+          <div><label for="sc_uk">UK domestic and UK berths, %</label><input id="sc_uk" class="scp" type="number" min="0" max="100" step="1" placeholder="0"></div>
+          <div><label for="sc_gbni">Great Britain to N. Ireland, %</label><input id="sc_gbni" class="scp" type="number" min="0" max="100" step="1" placeholder="0"></div>
+          <div><label>Outside EU and UK scope</label><div id="sc_rest" class="num" style="padding:10px 2px;font-weight:800">100%</div></div>
+        </div>
+
+        <details class="whatif" id="g5Box" style="margin-top:16px">
           <summary>G5 corrections and voyage adjustments (MEPC.355(78)), optional</summary>
-          <p class="dim" style="font-size:12.5px;margin:8px 0">Only enter values your
-             verifier has accepted (ice transit, ship-to-ship transfers, shuttle-tanker or
-             ice-class capacity factors). We apply and record them. We never
-             invent a correction.</p>
-          <div class="row">
-            <input id="g5_co2" type="number" step="0.1" placeholder="Excluded CO₂ (t)">
-            <input id="g5_dist" type="number" step="1" placeholder="Excluded distance (nm)">
-            <input id="g5_cap" type="number" step="0.001" placeholder="Capacity factor (default 1.0)">
-            <input id="g5_basis" placeholder="Documentation reference">
-          </div>
+          <p class="dim" style="font-size:12.5px;margin:8px 0">Each line is a deduction the IMO guidelines allow, shown only
+            if it can apply to the ship type you picked. Enter only what your logbook, kWh meters, BAPLIE files or ice
+            charts support, and record the evidence: you must report every parameter you use to the Administration.
+            Electrical, boiler and other deductions count at (0.75 &minus; 0.03 &times; years since 2023) of the fuel,
+            so 0.66 in 2026 and 0.54 in 2030.</p>
+          <div id="g5Lines"></div>
+          <div class="row" style="margin-top:8px" id="g5Flags"></div>
+          <details style="margin-top:8px">
+            <summary class="dim" style="font-size:13px;cursor:pointer">Capacity correction factors from the EEDI/EEXI Technical File</summary>
+            <div class="fuelgrid" style="margin-top:8px">
+              <div><label for="g5_fi">fi (ice-classed ships)</label><input id="g5_fi" type="number" step="0.001" min="0.5" max="3" value="1"></div>
+              <div><label for="g5_fm">fm (ice class IA, IA Super)</label><input id="g5_fm" type="number" step="0.001" min="0.5" max="3" value="1"></div>
+              <div><label for="g5_fc">fc (chemical tankers)</label><input id="g5_fc" type="number" step="0.001" min="0.5" max="3" value="1"></div>
+              <div><label for="g5_fivse">fiVSE (self-unloading bulk)</label><input id="g5_fivse" type="number" step="0.001" min="0.5" max="3" value="1"></div>
+            </div>
+            <p class="dim" style="font-size:12px;margin-top:6px">Use only factors that are in the ship&rsquo;s Technical File (G5 para 4.6). Leave 1 otherwise.</p>
+          </details>
+        </details>
+
+        <details class="whatif" id="calcPrices" style="margin-top:6px">
+          <summary>Prices, exceptions and charter split</summary>
+          <div id="calcAsm"></div>
         </details>
 
         <div class="row" style="margin-top:14px">
-          <button class="cta" id="ciiGo" onclick="runCii()">Compute CII</button>
-          <button class="ghost" onclick="fillCiiExample()">Try an example ▸</button>
-          <button class="ghost" onclick="lockCii()">Lock again</button>
+          <button class="cta" id="ciiGo" onclick="runCii()">Work it out</button>
+          <button class="ghost" id="ciiLockBtn" onclick="lockCii()" style="display:none">Forget my key</button>
         </div>
-        <div id="ciiErr" class="err"></div>
+        <div id="ciiErr" class="err" role="alert"></div>
       </div>
       <div id="ciiOut"></div>
     </div>
@@ -635,7 +682,7 @@
       <div id="clOut"></div>
       <p class="dim" style="font-size:12px;margin-top:10px">We use these details only to
         verify and answer your request.
-        <a class="ck-priv" href="privacy.html" target="_blank" rel="noopener"
+        <a class="ck-priv" href="/privacy" target="_blank" rel="noopener"
            style="color:var(--teal)">Privacy notice</a></p>
     </div>
     <div class="card method" id="privacyOut">
@@ -648,9 +695,13 @@
     publishes in THETIS-MRV, unless you supply your own data. Source: EMSA THETIS-MRV public
     report, published under Article 21 of Regulation (EU) 2015/757. Contains data from EMSA.
     CarbonKeel&rsquo;s calculations are our own and are not endorsed by EMSA or the European
-    Commission. <a style="cursor:pointer" onclick="showTab('privacy')">How we handle the data,
-    and your controls</a> · <a class="ck-priv" href="privacy.html"
-    target="_blank" rel="noopener">Privacy notice</a>. Not search-indexed. CarbonKeel preview v0.6.
+    Commission. CarbonKeel is operated by Prayag Raviprakash, India; it is independent and is not an
+    accredited verifier, so allowances and FuelEU balances are settled on your verifier&rsquo;s figures.
+    Allowance and pool prices are assumptions you can change. Not legal or investment advice.
+    <a style="cursor:pointer" onclick="showTab('privacy')">How we handle the data,
+    and your controls</a> · <a class="ck-priv" href="/privacy"
+    target="_blank" rel="noopener">Privacy notice</a> · <a href="mailto:hello@carbonkeel.com">hello@carbonkeel.com</a>.
+    Ship results are not search-indexed. CarbonKeel v0.7.
   </footer>
 </div>
 
@@ -661,30 +712,45 @@ const API = (location.protocol === 'http:' || location.protocol === 'https:')
   ? '' : 'http://127.0.0.1:8000';
 const E = id => document.getElementById(id);
 const eur = n => '€' + Math.round(n).toLocaleString('en-GB');
+const num = (n, d = 0) => Number(n).toLocaleString('en-GB', {maximumFractionDigits: d, minimumFractionDigits: d});
+/* every string that came from the register or the visitor goes through h() before innerHTML */
+const h = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 let currentImo = null, currentDwt = null, baseCost = null,
     methodLoaded = false, privacyLoaded = false;
 
-/* The logo is home: opening tab, cleared search, top of page. */
-function goHome() {
-  showTab('vessel');
-  E('q').value = '';
-  E('err').textContent = '';
-  E('out').innerHTML = '';
-  E('sugg').style.display = 'none';
-  if (history.replaceState) history.replaceState(null, '', location.pathname);
-  window.scrollTo({top: 0, behavior: 'smooth'});
+/* Prices and assumptions: inputs the visitor can change. Remembered on this device only. */
+const ASM_DEFAULT = {eua: 85, uka: 40, fx: 1.15, pool: 110, basis: 'penalty', defy: 1,
+                     cfrom: '', cto: '', cpct: '', exp: 3, aux: 0};
+let asm = Object.assign({}, ASM_DEFAULT);
+try { Object.assign(asm, JSON.parse(localStorage.getItem('ck_asm') || '{}'), {cfrom: '', cto: '', cpct: ''}); } catch (e) { /* storage blocked */ }
+function saveAsm() { try { localStorage.setItem('ck_asm', JSON.stringify(asm)); } catch (e) { /* ignore */ } }
+function asmQs(a) {
+  a = a || asm;
+  let q = `&eua_price=${a.eua}&uka_price=${a.uka}&eur_per_gbp=${a.fx}&pool_price=${a.pool}` +
+          `&fueleu_basis=${a.basis}&deficit_years=${a.defy}`;
+  if (a.cfrom && a.cto) q += `&charter_from=${encodeURIComponent(a.cfrom)}&charter_to=${encodeURIComponent(a.cto)}`;
+  if (a.cfrom && a.cto && a.cpct !== '' && a.cpct != null) q += `&charter_pct=${a.cpct}`;
+  return q;
+}
+function lookupUrl(extra) {
+  let u = `${API}/api/lookup/${currentImo}?x=1${exQs()}${asmQs()}`;
+  if (currentDwt) u += `&dwt=${currentDwt}`;
+  return u + (extra || '');
 }
 
-function showTab(t) {
-  for (const x of ['vessel', 'eexi', 'cii', 'fleet', 'cal', 'method', 'privacy']) {
+const TABS = ['vessel', 'eexi', 'cii', 'fleet', 'cal', 'method', 'privacy'];
+function showTab(t, keepHash) {
+  for (const x of TABS) {
     E('tab-' + x).classList.toggle('on', x === t);
     E('nav-' + x).classList.toggle('on', x === t);
   }
   if (t === 'privacy' && !privacyLoaded) loadPrivacy();
-  if (t === 'cii' && ciiKey && E('ciiApp').style.display === 'none') unlockCii(true);
   E('topsearch').style.display = t === 'vessel' ? 'none' : 'block';
   if (t === 'method' && !methodLoaded) loadMethod();
   if (t === 'cal' && E('calout').style.display === 'none') loadCal();
+  if (!keepHash && history.replaceState)
+    history.replaceState(null, '', location.pathname + location.search + (t === 'vessel' ? '' : '#' + t));
 }
 
 /* ---------- shared autosuggest with keyboard nav (U3) ---------- */
@@ -702,8 +768,8 @@ function wireSuggest(inputId, suggId, onPick) {
       const d = await r.json();
       if (!d.count) { s.style.display = 'none'; return; }
       s.innerHTML = d.results.map(x =>
-        `<div data-imo="${x.imo}" data-name="${x.name.replace(/"/g, '&quot;')}">
-           <b>${x.name}</b> <span class="dim">· ${x.ship_type} · IMO ${x.imo}
+        `<div data-imo="${h(x.imo)}" data-name="${h(x.name)}">
+           <b>${h(x.name)}</b> <span class="dim">· ${h(x.ship_type)} · IMO ${h(x.imo)}
            ${x.supported ? '' : '· not yet supported'}</span></div>`).join('');
       for (const div of s.children)
         div.onclick = () => { s.style.display = 'none';
@@ -745,20 +811,28 @@ const exQs = () => (exState.ice ? '&ice_class=true' : '') + (exState.der > 0 ? '
 const VIEWS = [['owner', 'Owner / CFO'], ['tech', 'Technical / Ops'],
                ['verifier', 'Verifier']];
 
+async function fetchShip(extra) {
+  const r = await fetch(lookupUrl(extra));
+  const d = await r.json();
+  if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'That value is outside the allowed range.');
+  return d;
+}
+
 async function pick(imo) {
   E('err').textContent = ''; currentImo = imo; currentDwt = null;
   baseCost = null; valueTeaser = null; valueCo2 = null; revealNext = true; exState = {ice: false, der: 0};
+  asm.cfrom = ''; asm.cto = ''; asm.cpct = '';
   E('spin').style.display = 'block';
   try {
-    const r = await fetch(`${API}/api/lookup/${imo}`);
+    const r = await fetch(lookupUrl());
     if (!r.ok) { const t = (await r.json()).detail;
-      E('err').innerHTML = t + (t.includes('not yet supported')
+      E('err').innerHTML = h(t) + (String(t).includes('not yet supported')
         ? ' <a style="cursor:pointer" onclick="showTab(\'eexi\')">Try the custom EEXI check &rarr;</a>' : '');
       E('out').innerHTML = ''; return; }
     const d = await r.json();
     lastData = d; lastMode = 'partial';
     if (d.suppressed) { renderVessel(); return; }   // operator opted out
-    baseCost = d.ets.cost_eur + d.fueleu.penalty_eur;
+    baseCost = d.bill.total_eur;
     renderVessel();
     probeValue();
   } catch (e) { E('err').textContent = 'Something went wrong. Please try again.'; }
@@ -766,36 +840,43 @@ async function pick(imo) {
 }
 
 async function addDwt() {
-  const dwt = E('dwtIn').value.trim();
-  if (!dwt || !currentImo) return;
-  const r = await fetch(`${API}/api/lookup/${currentImo}?dwt=${dwt}${exQs()}`);
-  if (!r.ok) { E('err').textContent = (await r.json()).detail; return; }
+  const dwt = parseFloat(E('dwtIn').value);
+  if (!(dwt > 0) || !currentImo) { E('err').textContent = 'Enter the deadweight as a positive number.'; return; }
+  const prev = currentDwt;
   currentDwt = dwt;
-  const d = await r.json();
-  lastData = d; lastMode = 'full'; valueTeaser = null; valueCo2 = null; revealNext = true;
-  baseCost = d.scorecard.cost_exposure_eur;
-  renderVessel();
-  probeValue();
+  try {
+    const d = await fetchShip();
+    lastData = d; lastMode = 'full'; valueTeaser = null; valueCo2 = null; revealNext = true;
+    baseCost = d.bill.total_eur; E('err').textContent = '';
+    renderVessel();
+    probeValue();
+  } catch (e) { currentDwt = prev; E('err').textContent = e.message; }
+}
+
+function whatIfQs() {
+  const bio = parseFloat(E('wiBio') && E('wiBio').value) || 0, spd = parseFloat(E('wiSpd') && E('wiSpd').value) || 0;
+  asm.exp = parseFloat(E('wiExp') && E('wiExp').value) || 3;
+  asm.aux = parseFloat(E('wiAux') && E('wiAux').value) || 0;
+  saveAsm();
+  return {bio, spd, qs: `&biofuel_pct=${bio}&speed_pct=${spd}&speed_exp=${asm.exp}&aux_pct=${asm.aux}`};
 }
 
 async function whatIf() {
-  const bio = E('wiBio').value || 0, spd = E('wiSpd').value || 0;
-  let url = `${API}/api/lookup/${currentImo}?biofuel_pct=${bio}&speed_pct=${spd}${exQs()}`;
-  if (currentDwt) url += `&dwt=${currentDwt}`;
-  const r = await fetch(url);
-  if (!r.ok) { E('err').textContent = (await r.json()).detail; return; }
-  const d = await r.json();
-  const cost = currentDwt ? d.scorecard.cost_exposure_eur
-                          : d.ets.cost_eur + d.fueleu.penalty_eur;
+  const w = whatIfQs();
+  let d;
+  try { d = await fetchShip(w.qs); } catch (e) { E('err').textContent = e.message; return; }
+  E('err').textContent = '';
+  const cost = d.bill.total_eur;
   const delta = baseCost - cost;
   const pct = baseCost ? Math.round(Math.abs(delta) / baseCost * 100) : 0;
   const banner = `<div class="ba ${delta >= 0 ? '' : 'worse'}">
       <div class="c"><small>Before</small><b>${eur(baseCost)}</b></div>
-      <div class="ar">${bio}% B100 biofuel, ${spd}% speed &rarr;</div>
+      <div class="ar">${w.bio}% B100 biofuel, ${w.spd}% speed &rarr;</div>
       <div class="c"><small>After</small><b>${eur(cost)}</b></div>
       <div class="chg">${delta >= 0 ? '&minus;' : '+'}${pct}%</div>
       <div class="fine">Carbon cost ${delta >= 0 ? 'falls' : 'rises'} by <b>${eur(Math.abs(delta))} a year</b>
-        (modelled, not measured), before fuel costs and any effect on voyage time.</div></div>`;
+        (modelled, not measured), before fuel costs and any effect on voyage time. Speed exponent ${asm.exp},
+        auxiliaries ${asm.aux}% of sea fuel; berth fuel is unchanged.</div></div>`;
   renderVessel(banner, true, d);   // scenario rendered; baseline kept in lastData
 }
 
@@ -803,13 +884,8 @@ async function whatIf() {
 async function probeValue() {
   const imo = currentImo, mode = lastMode, base = baseCost;
   try {
-    let url = `${API}/api/lookup/${imo}?biofuel_pct=20&speed_pct=-10${exQs()}`;
-    if (currentDwt) url += `&dwt=${currentDwt}`;
-    const r = await fetch(url);
-    if (!r.ok) return;
-    const d = await r.json();
-    const cost = currentDwt ? d.scorecard.cost_exposure_eur
-                            : d.ets.cost_eur + d.fueleu.penalty_eur;
+    const d = await fetchShip(`&biofuel_pct=20&speed_pct=-10&speed_exp=${asm.exp}&aux_pct=${asm.aux}`);
+    const cost = d.bill.total_eur;
     const delta = base - cost;
     if (imo === currentImo && mode === lastMode && delta > 1000) {
       valueTeaser = delta;
@@ -822,31 +898,32 @@ async function probeValue() {
 }
 /* the parts of the bill, whichever way the result was built */
 function billParts(d) {
-  const full = lastMode === 'full';
-  const ukets_cost = full ? (d.scorecard.ukets.cost_gbp * 1.15) : (d.ukets && d.ukets.cost_gbp * 1.15 || 0);
+  const full = !!d.scorecard;
   return {ets: full ? d.scorecard.ets : d.ets, feu: full ? d.scorecard.fueleu : d.fueleu,
-          uk: ukets_cost, year: full ? d.scorecard.year : d.year};
+          uk: full ? d.scorecard.ukets : d.ukets, nzf: full ? d.scorecard.nzf : d.nzf,
+          ukEur: d.bill.ukets_eur, year: d.bill.year, bill: d.bill};
 }
 /* Observation -> why -> impact -> action -> expected value, from this ship's own numbers.
    The value is carbon cost avoided by a modelled lever package: it is not a measured result
    and it leaves out the cost of the biofuel. */
 function teaserHtml() {
   if (!valueTeaser || !lastData || lastData.suppressed) return '';
-  const p = billParts(lastData), etsE = p.ets.cost_eur, feuE = p.feu.penalty_eur;
-  const total = etsE + feuE + p.uk, share = p.ets.surrender_share;
+  const p = billParts(lastData), etsE = p.ets.cost_eur, feuE = p.bill.fueleu_eur;
+  const total = p.bill.total_eur, share = p.ets.surrender_share;
   const fwd = share < 1 ? total - etsE + etsE / share : total;
   const lines = [['EU ETS', etsE], ['FuelEU', feuE]].sort((a, b) => b[1] - a[1]);
   const cb = p.feu.compliance_balance_tco2e;
-  const why = (cb < 0
-    ? `Fuel intensity is ${p.feu.ghg_intensity} gCO\u2082e/MJ against a FuelEU limit of ${p.feu.target}, a shortfall of ${Math.round(-cb).toLocaleString('en-GB')} t. `
+  const why = (p.feu.applicable === false ? 'FuelEU does not apply to this ship on the public record, so the cost sits in emissions trading. '
+    : cb < 0
+    ? `Fuel intensity is ${p.feu.ghg_intensity} gCO₂e/MJ against a FuelEU limit of ${p.feu.target}, a shortfall of ${num(-cb)} t. `
     : `FuelEU is in surplus, so the cost sits in emissions trading. `)
-    + `Each tonne of EU-scope CO\u2082 is charged at \u20ac${p.ets.eua_price_used}`
+    + `Each tonne of EU-scope CO₂ is charged at €${p.ets.eua_price_used}`
     + (share < 1 ? `, and the share surrendered rises from ${Math.round(share * 100)}% to 100% in 2026.` : '.');
-  const co2 = valueCo2 ? ` ETS-scope CO\u2082e falls by ${Math.round(valueCo2.before - valueCo2.after).toLocaleString('en-GB')} t (${Math.round((1 - valueCo2.after / valueCo2.before) * 100)}%).` : '';
+  const co2 = valueCo2 && valueCo2.before ? ` ETS-scope CO₂e falls by ${num(valueCo2.before - valueCo2.after)} t (${Math.round((1 - valueCo2.after / valueCo2.before) * 100)}%).` : '';
   return `<div class="insight">
     <div class="ih"><b>From problem to action</b><span>Modelled on this ship&rsquo;s own figures</span></div>
     <ol>
-      <li class="o"><b>Observation</b><p>${eur(total)} carbon bill for ${p.year} emissions. ${lines[0][0]} is ${Math.round(lines[0][1] / total * 100)}% of it.</p></li>
+      <li class="o"><b>Observation</b><p>${eur(total)} carbon bill for ${p.year} emissions. ${lines[0][0]} is ${total ? Math.round(lines[0][1] / total * 100) : 0}% of it.</p></li>
       <li class="w"><b>Why</b><p>${why}</p></li>
       <li class="i"><b>Impact</b><p>${share < 1 ? `${eur(total)} now; about ${eur(fwd)} a year on the 2026 rules.` : `${eur(total)} a year.`}</p></li>
       <li class="a"><b>Action</b><p>Replace 20% of fuel energy with certified biofuel (B100) on EU voyages and sail 10% slower.</p></li>
@@ -858,7 +935,7 @@ function teaserHtml() {
 function applyTeaser() {
   currentView = 'owner';
   renderVessel();
-  const det = document.querySelector('details.whatif');
+  const det = document.querySelector('details.whatif.wi');
   if (det) det.open = true;
   E('wiBio').value = 20; E('wiSpd').value = -10;
   whatIf();
@@ -876,7 +953,7 @@ function claimLink(imo) {
   return `<div class="dim" style="font-size:12px;margin-top:14px;
     padding-top:10px;border-top:1px solid var(--line)">
     Figures for this ship are our estimates, built from the public data EMSA publishes under
-    Article 21. <a class="inl" style="cursor:pointer" onclick="openClaim('${imo}')">Is this
+    Article 21. <a class="inl" style="cursor:pointer" onclick="openClaim('${h(imo)}')">Is this
     your ship? Claim it, correct a figure, or hide our estimates &#9656;</a></div>`;
 }
 function openClaim(imo) {
@@ -915,17 +992,17 @@ async function submitClaim() {
 /* ---- a vessel whose operator opted out of our derived figures ---- */
 function renderSuppressed(d) {
   E('out').innerHTML = shell(`
-    <div class="idstrip"><b>${d.vessel_name}</b> · IMO ${d.imo} · ${d.ship_type}</div>
-    <div class="banner warn">${d.note}</div>
+    <div class="idstrip"><b>${h(d.vessel_name)}</b> · IMO ${h(d.imo)} · ${h(d.ship_type)}</div>
+    <div class="banner warn">${h(d.note)}</div>
     <div class="statline">
-      <span>Verified CO₂ <b class="num">${Math.round(d.verified.co2_tonnes || 0).toLocaleString('en-GB')} t</b></span>
-      <span>Verified fuel <b class="num">${Math.round(d.verified.fuel_tonnes || 0).toLocaleString('en-GB')} t</b></span>
-      ${d.verified.tech_efficiency ? `<span>Design <b>${d.verified.tech_efficiency}</b></span>` : ''}
+      <span>Verified CO₂ <b class="num">${num(d.verified.co2_tonnes || 0)} t</b></span>
+      <span>Verified fuel <b class="num">${num(d.verified.fuel_tonnes || 0)} t</b></span>
+      ${d.verified.tech_efficiency ? `<span>Design <b>${h(d.verified.tech_efficiency)}</b></span>` : ''}
     </div>
     <p class="dim" style="font-size:12.5px;margin-top:10px">EMSA publishes these verified
       figures under Article 21 of the EU MRV Regulation, and they stay available at the source
       whatever this site shows.
-      <a class="inl" style="cursor:pointer" onclick="openClaim('${d.imo}')">If you
+      <a class="inl" style="cursor:pointer" onclick="openClaim('${h(d.imo)}')">If you
       operate this ship, claim it to see the full analysis &#9656;</a></p>`, d.source);
 }
 
@@ -943,86 +1020,85 @@ function renderVessel(banner, keepOpen, override) {
   }
 }
 
+const shipName = d => d.scorecard ? d.scorecard.vessel_name : d.vessel_name;
+const shipImo = d => d.scorecard ? d.scorecard.imo_number : d.imo;
+
 /* ---- Technical / Ops view: rating, levers, fleet standing ---- */
 function renderTech(d, banner, keepOpen) {
-  const full = lastMode === 'full';
+  const full = !!d.scorecard;
   const sc = full ? d.scorecard : null;
-  const name = full ? sc.vessel_name : d.vessel_name;
-  const imo = full ? sc.imo_number : d.imo;
-  const year = full ? sc.year : d.year;
   const techEff = (lastData.verified || {}).tech_efficiency;
   const ciiSection = full ? `
     <div class="statline">
       <span>CII <b class="rating-${sc.cii.rating}" style="font-size:22px">${sc.cii.rating}</b>
         <span class="dim num">(ratio ${sc.cii.ratio}, Z=${sc.cii.z_factor_pct}%)</span></span>
-      <span class="dim num">CO₂ ${Math.round(sc.cii.co2_tonnes).toLocaleString('en-GB')} t this period</span>
+      <span class="dim num">CO₂ ${num(sc.cii.co2_tonnes)} t this period</span>
     </div>
-    ${ciiDetail(sc.cii)}`
-    : `<div class="banner warn">The CII rating needs the ship&rsquo;s capacity:
+    ${ciiDetail(sc.cii)}${eexiBlock(d)}`
+    : `<div class="banner warn">The CII rating and EEXI need the ship&rsquo;s capacity:
        <span class="dwt-up" style="display:inline-flex">
-       <input id="dwtIn" type="number" placeholder="DWT (GT for ro-ro and cruise)" style="max-width:250px">
+       <input id="dwtIn" type="number" min="1" placeholder="DWT (GT for ro-ro and cruise)" style="max-width:250px">
        <button class="ghost" onclick="addDwt()">Rate it</button></span></div>`;
   const actions = full ? sc.actions : [];
   E('out').innerHTML = shell(`
     ${viewBar()}${banner || ''}
-    <div class="idstrip"><b>${name}</b> · IMO ${imo} · ${year}
-      ${techEff ? ' · design: ' + techEff : ''}</div>
+    <div class="idstrip"><b>${h(shipName(d))}</b> · IMO ${h(shipImo(d))} · ${d.bill.year}
+      ${techEff ? ' · design: ' + h(techEff) : ''}</div>
     ${ciiSection}
     <div id="fleetCtx"></div>
     ${actions.length ? `<b>Operational levers, ranked</b>
-      <ol class="actions">${actions.map(a => `<li>${a}</li>`).join('')}</ol>` : ''}
+      <ol class="actions">${actions.map(a => `<li>${h(a)}</li>`).join('')}</ol>` : ''}
     ${whatIfBox(keepOpen === undefined ? true : keepOpen)}`,
     d.source || lastData.source);
   const di = E('dwtIn');
   if (di) di.addEventListener('keydown', e => { if (e.key === 'Enter') addDwt(); });
-  loadFleetCtx(imo);
+  loadFleetCtx(shipImo(d));
 }
 
 /* ---- Verifier view: provenance, parameters, reproducibility ---- */
 function renderVerifier(d) {
-  const full = lastMode === 'full';
   const v = lastData.verified || {};
-  const name = full ? d.scorecard.vessel_name : d.vessel_name;
-  const imo = full ? d.scorecard.imo_number : d.imo;
-  const ets = full ? d.scorecard.ets : d.ets;
-  const feu = full ? d.scorecard.fueleu : d.fueleu;
+  const {ets, feu} = billParts(d);
+  const imo = shipImo(d);
   const rows = [
-    ['Verified total CO₂ (EMSA filing)', `${Math.round(v.co2_tonnes || 0).toLocaleString('en-GB')} t`],
-    ['Verified total fuel', `${Math.round(v.fuel_tonnes || 0).toLocaleString('en-GB')} t`],
+    ['Verified total CO₂ (EMSA filing)', `${num(v.co2_tonnes || 0)} t`],
+    ['Verified total fuel', `${num(v.fuel_tonnes || 0)} t`],
     ['Distance (worked out from the filed CO₂ per nm)', v.est_distance_nm ?
-        `${Math.round(v.est_distance_nm).toLocaleString('en-GB')} nm — ESTIMATE` : '—'],
-    ['ETS-scope CO₂, verifier-reported', v.ets_scope_co2_reported ?
-        `${Math.round(v.ets_scope_co2_reported).toLocaleString('en-GB')} t` : '—'],
-    ['ETS-scope CO₂, our own rebuild', v.ets_scope_co2_rebuilt != null ? `${Math.round(v.ets_scope_co2_rebuilt).toLocaleString('en-GB')} t` : '—'],
-    ['ETS-scope CO₂e the bill is based on', `${Math.round(ets.co2e_in_scope_t).toLocaleString('en-GB')} t (${ets.basis === 'verifier' ? 'the verifier’s figure' : 'our rebuild'})`],
-    ['FuelEU intensity (Annex II defaults)', `${feu.ghg_intensity} against a target of ${feu.target} gCO₂e/MJ`],
-    ['Technical efficiency as filed', v.tech_efficiency || '—'],
+        `${num(v.est_distance_nm)} nm — ESTIMATE` : '—'],
+    ['ETS-scope CO₂, verifier-reported', v.ets_scope_co2_reported != null ?
+        `${num(v.ets_scope_co2_reported)} t` : '—'],
+    ['ETS-scope CO₂, our own rebuild', v.ets_scope_co2_rebuilt != null ? `${num(v.ets_scope_co2_rebuilt)} t` : '—'],
+    ['ETS-scope CO₂e the bill is based on', `${num(ets.co2e_in_scope_t)} t (${ets.basis === 'verifier' ? 'the verifier’s figure' : 'our rebuild'})`],
+    ['FuelEU intensity (Annex II defaults)', feu.applicable === false ? 'not applicable' : `${feu.ghg_intensity} against a target of ${feu.target} gCO₂e/MJ`],
+    ['Technical efficiency as filed', h(v.tech_efficiency || '—')],
   ].map(([k, val]) => `<tr><td style="text-align:left;color:var(--muted)">${k}</td>
       <td class="num">${val}</td></tr>`).join('');
   const rep_ = v.ets_scope_co2_reported, reb = v.ets_scope_co2_rebuilt;
   const gap = (rep_ && reb != null) ? Math.abs(reb - rep_) / rep_ : null;
   let verdict;
   if (rep_ == null) verdict = '<div class="banner warn"><b>No verifier figure in the register.</b> The bill uses our own rebuild from the scope split.</div>';
-  else if (rep_ === 0) verdict = `<div class="banner warn"><b>The verifier reported no ETS-scope emissions for this ship.</b> No allowances are due.
-      Most often the ship is below 5,000 GT (smaller cargo ships report under EU MRV from 2025 but are outside the ETS), is an offshore ship (in the ETS from 2027), or is exempt.
-      Our own rebuild from the scope split would have been ${Math.round(reb || 0).toLocaleString('en-GB')} t, which is why the bill uses the verifier&rsquo;s figure.</div>`;
+  else if (rep_ === 0) verdict = `<div class="banner warn"><b>The verifier reported no ETS-scope emissions for this ship.</b> No allowances are due, and FuelEU is treated as not applying.
+      Most often the ship is below 5,000 GT (smaller cargo ships report under EU MRV from 2025 but are outside the ETS and FuelEU), is an offshore ship (in the ETS from 2027), or is exempt.
+      Our own rebuild from the scope split would have been ${num(reb || 0)} t, which is why the bill uses the verifier&rsquo;s figure.</div>`;
   else if (gap < 0.02) verdict = '<div class="banner good"><b>Check passed.</b> Our own rebuild of the ETS-scope CO&#8322; is within 2% of the verifier&rsquo;s figure. Across the 2025 report we match exactly for about two ships in three, and within 2% for about three in four.</div>';
   else verdict = `<div class="banner warn"><b>Our rebuild is ${Math.round(gap * 100)}% ${reb > rep_ ? 'above' : 'below'} the verifier&rsquo;s figure.</b>
       The bill uses the verifier&rsquo;s figure. Differences come from rules the public record does not show: a container ship&rsquo;s stops at neighbouring transhipment ports, ports of call, derogations for islands and outermost regions, or part-year filings.</div>`;
   E('out').innerHTML = shell(`
     ${viewBar()}
-    <div class="idstrip"><b>${name}</b> · IMO ${imo} · reproducibility record</div>
+    <div class="idstrip"><b>${h(shipName(d))}</b> · IMO ${h(imo)} · reproducibility record</div>
     ${verdict}
     <div style="overflow-x:auto"><table class="data">${rows}</table></div>
+    ${scopeTable(d, true)}
     <p class="dim" style="font-size:12.5px;margin-top:12px">
       Every parameter (carbon factors, reference lines, Z factors, dd vectors,
       Annex II fuel properties, GWPs) comes from a cited table. See the
       <a class="inl" style="cursor:pointer" onclick="showTab('method')">full method</a>.
       ${currentDwt ? `Calculation worksheet:
-        <a class="inl" href="${API}/api/audit/${imo}?dwt=${currentDwt}"
-        target="_blank">open the audit worksheet for this ship &#9656;</a>`
-        : 'Add the ship\u2019s DWT on the Owner view to open the audit worksheet.'}
-    </p>`, d.source || lastData.source);
+        <a class="inl" href="${API}/api/audit/${h(imo)}?dwt=${currentDwt}&eua_price=${asm.eua}"
+        target="_blank" rel="noopener">open the audit worksheet for this ship &#9656;</a>`
+        : 'Add the ship’s DWT on the Owner view to open the audit worksheet.'}
+    </p>
+    ${reportButtons(imo)}`, d.source || lastData.source);
 }
 
 /* Exceptions that can lower the EU ETS bill but depend on facts the public file does not show */
@@ -1036,38 +1112,49 @@ function exceptionsBox() {
       <input id="exIce" type="checkbox" style="width:auto;min-height:0" ${exState.ice ? 'checked' : ''}>
       Ice class IA, IA Super or equivalent: 5% fewer allowances</label>
     <div class="dwt-up">
-      <label class="dim" style="font-size:12.5px;flex-basis:100%">Share of this ship&rsquo;s EU emissions covered by a derogation, %
+      <label class="dim" for="exDer" style="font-size:12.5px;flex-basis:100%">Share of this ship&rsquo;s EU emissions covered by a derogation, %
         (island services, outermost-region voyages or a public-service route)</label>
       <input id="exDer" type="number" min="0" max="100" value="${exState.der || ''}" placeholder="0">
       <button class="ghost" onclick="applyEx()">Recompute</button>
     </div>
-    ${(e.exceptions_applied || []).length ? `<div class="banner good" style="font-size:13.5px"><b>Applied:</b> ${e.exceptions_applied.join('; ')}.</div>` : ''}
+    ${(e.exceptions_applied || []).length ? `<div class="banner good" style="font-size:13.5px"><b>Applied:</b> ${e.exceptions_applied.map(h).join('; ')}.</div>` : ''}
     <p class="dim" style="font-size:12px;margin-top:8px">Not needed for the other cases: the figure we use is the verifier&rsquo;s own,
       which already reflects ship size, a container ship&rsquo;s stops at neighbouring transhipment ports, and ports of call.</p>
   </details>`;
 }
 async function applyEx() {
   exState = {ice: E('exIce').checked, der: Math.max(0, Math.min(100, parseFloat(E('exDer').value) || 0))};
-  let url = `${API}/api/lookup/${currentImo}?x=1${exQs()}`;
-  if (currentDwt) url += `&dwt=${currentDwt}`;
-  const r = await fetch(url);
-  if (!r.ok) { E('err').textContent = (await r.json()).detail; return; }
-  lastData = await r.json(); valueTeaser = null; valueCo2 = null;
-  baseCost = currentDwt ? lastData.scorecard.cost_exposure_eur : lastData.ets.cost_eur + lastData.fueleu.penalty_eur;
-  renderVessel(); probeValue();
+  await refetch(true);
+}
+/* Re-run the current ship with the current inputs; keep the view. */
+async function refetch(openEx) {
+  try {
+    lastData = await fetchShip(); valueTeaser = null; valueCo2 = null;
+    baseCost = lastData.bill.total_eur; E('err').textContent = '';
+    renderVessel(); probeValue();
+  } catch (e) { E('err').textContent = e.message; }
 }
 
 function whatIfBox(open) {
-  const bio = E('wiBio') ? E('wiBio').value : '', spd = E('wiSpd') ? E('wiSpd').value : '';
-  return `<details class="whatif"${open ? ' open' : ''}>
+  const v = id => E(id) ? E(id).value : '';
+  return `<details class="whatif wi"${open ? ' open' : ''}>
     <summary>What would biofuel or slowing down save?</summary>
     <div class="dwt-up">
-      <label class="dim" style="font-size:12.5px">B100 biofuel %</label>
-      <input id="wiBio" type="number" min="0" max="100" value="${bio}" placeholder="0">
-      <label class="dim" style="font-size:12.5px">speed change %</label>
-      <input id="wiSpd" type="number" min="-30" max="20" value="${spd}" placeholder="-10">
+      <label class="dim" for="wiBio" style="font-size:12.5px">B100 biofuel %</label>
+      <input id="wiBio" type="number" min="0" max="100" value="${h(v('wiBio'))}" placeholder="0">
+      <label class="dim" for="wiSpd" style="font-size:12.5px">speed change %</label>
+      <input id="wiSpd" type="number" min="-30" max="20" value="${h(v('wiSpd'))}" placeholder="-10">
       <button class="ghost" onclick="whatIf()">Recompute</button>
-    </div></details>`;
+    </div>
+    <div class="dwt-up">
+      <label class="dim" for="wiExp" style="font-size:12.5px">speed exponent n</label>
+      <input id="wiExp" type="number" min="2" max="4.5" step="0.1" value="${asm.exp}">
+      <label class="dim" for="wiAux" style="font-size:12.5px">auxiliaries and boilers, % of sea fuel</label>
+      <input id="wiAux" type="number" min="0" max="100" step="1" value="${asm.aux}">
+    </div>
+    <p class="dim" style="font-size:12px;margin-top:6px">Main-engine fuel per mile scales with speed<sup>n&minus;1</sup>
+      (n = 3 is the cube law; eco-ships and ships with a power limitation are often nearer 2.6 to 3.5).
+      Auxiliary and boiler fuel burns per day, so slowing down adds to it. Fuel at berth does not change.</p></details>`;
 }
 
 /* "thetis_mrv_2025_v6.xlsx" -> "EMSA THETIS-MRV, 2025 report, version 6" */
@@ -1083,29 +1170,46 @@ function shell(inner, src) {
     ${inner}</div>`;
 }
 
-/* bill block: hierarchy winner + bullet graphs (U2, Few) */
 /* the EU ETS line under the bar: what is due, by when, and what the CO2 figure rests on */
 function etsDue(e) {
   if (e.calibration === 0) return 'The verifier reported no ETS-scope emissions for this ship, so no allowances are due.';
   if (!e.surrender_share) return 'The EU maritime scheme starts with 2024 emissions, so nothing is due for this year.';
   const by = e.surrender_by || '30 September';
   const basis = e.basis === 'verifier' ? ' Based on the verifier’s reported CO₂.' : '';
-  return `${Math.round(e.allowances_due).toLocaleString('en-GB')} EU allowances at €${e.eua_price_used}. Surrender by ${by}. At €60: ${eur(e.allowances_due * 60)} · at €100: ${eur(e.allowances_due * 100)}.${basis}`;
+  const lo = Math.max(1, e.eua_price_used - 15), hi = e.eua_price_used + 15;
+  return `${num(e.allowances_due)} EU allowances at €${e.eua_price_used}. Surrender by ${by}. At €${lo}: ${eur(e.allowances_due * lo)} · at €${hi}: ${eur(e.allowances_due * hi)}.${basis}`;
 }
 
-/* a ship with no ETS-scope emissions may be below the 5,000 GT FuelEU threshold: say so, do not guess */
-const feuCheck = e => (e && e.calibration === 0)
-  ? ' Check applicability: FuelEU covers ships above 5,000 GT, and this ship reported no ETS-scope emissions, so it may be smaller.' : '';
+function feuDue(f, bill, a) {
+  if (f.applicable === false) return h(f.surplus_value_note);
+  const cb = f.compliance_balance_tco2e;
+  if (cb < 0) {
+    const mult = f.penalty_multiplier > 1 ? ` × ${f.penalty_multiplier} for repeat deficits` : '';
+    return `Shortfall ${num(-cb)} tCO₂e. Statutory penalty ${eur(f.penalty_eur)} (€${num(f.penalty_eur_per_tco2e)} per tonne${mult}).
+      Bought from a pool at €${num(a.pool_price_eur_per_tco2e)}/t: <b>${eur(bill.fueleu_pooled_eur)}</b>.
+      Pools are recorded by 30 April; an unpaid penalty is due by 30 June.`;
+  }
+  return `Surplus +${num(cb)} tCO₂e. It can be banked or pooled; at €${num(a.pool_price_eur_per_tco2e)}/t it is worth about
+    ${eur(cb * a.pool_price_eur_per_tco2e)} to a ship in deficit.`;
+}
 
-function billBlock(items, nzfUsd, year, share) {
-  const euros = items.filter(i => i.eur > 0);
-  /* Only part of the earlier years' emissions is surrendered (40% for 2024, 70% for
-     2025). Say so, and show what the same emissions cost at the 100% that applies from 2026. */
-  const etsEur = items[0].eur;
+function billBlock(d, onBasis = 'setBasis') {
+  const p = billParts(d), b = d.bill, a = d.assumptions;
+  const ukNa = p.uk.data_observable === false;
+  const feuNa = p.feu.applicable === false;
+  const items = [
+    {label: 'EU ETS', eur: b.ets_eur, due: etsDue(p.ets)},
+    {label: 'UK ETS', eur: b.ukets_eur, na: ukNa ? 'not visible' : null,
+     due: ukNa ? 'UK domestic voyages are not in the EU register, so they cannot be costed from public data. Use the your-data calculator to include them.'
+               : (p.uk.cost_gbp > 0 ? `£${num(p.uk.cost_gbp)} at £${p.uk.uka_price_used} per allowance. Surrender by ${h(p.uk.surrender_by)}.`
+                                    : h((p.uk.notes || []).slice(-1)[0] || 'No UK domestic voyages.'))},
+    {label: b.fueleu_basis === 'pool' ? 'FuelEU (pooled)' : 'FuelEU', eur: b.fueleu_eur, na: feuNa ? 'not in scope' : null,
+     due: feuDue(p.feu, b, a)},
+  ];
+  const share = p.ets.surrender_share, etsEur = b.ets_eur;
   const fwd = (share && share < 1 && etsEur > 0)
-    ? `Only ${Math.round(share * 100)}% of ${year} emissions is surrendered. From 2026 it is 100%: the same emissions would cost about ${eur(items.reduce((t, i) => t + i.eur, 0) - etsEur + etsEur / share)}.`
+    ? `Only ${Math.round(share * 100)}% of ${b.year} emissions is surrendered. From 2026 it is 100%: the same emissions would cost about ${eur(b.total_eur - etsEur + etsEur / share)}.`
     : '';
-  const total = items.reduce((t, i) => t + i.eur, 0);
   const max = Math.max(...items.map(i => i.eur), 1);
   const bars = items.map(i => `
     <div class="bullet">
@@ -1113,51 +1217,154 @@ function billBlock(items, nzfUsd, year, share) {
       <span class="track">${i.eur > 0 ? `<span class="fill num"
         style="width:${Math.max(2, i.eur / max * 100)}%;background:linear-gradient(90deg,#ff8a5c,#ff6b57)"></span>`
         : ''}</span>
-      <span class="val num ${i.eur > 0 ? '' : 'pos'}">${i.eur > 0 ? eur(i.eur) : '€0 ✓'}</span>
+      <span class="val num ${i.eur > 0 || i.na ? '' : 'pos'}">${i.na ? `<span class="dim">${i.na}</span>` : (i.eur > 0 ? eur(i.eur) : '€0 ✓')}</span>
       <span class="due">${i.due}</span>
     </div>`).join('');
+  const other = b.fueleu_basis === 'pool' ? b.total_penalty_eur : b.total_pooled_eur;
+  const basisChips = (!feuNa && b.fueleu_penalty_eur > 0) ? `<div class="chips" style="margin-top:8px" role="group" aria-label="How FuelEU is counted">
+      <button class="${b.fueleu_basis === 'penalty' ? 'on' : ''}" onclick="${onBasis}('penalty')">FuelEU at the statutory penalty</button>
+      <button class="${b.fueleu_basis === 'pool' ? 'on' : ''}" onclick="${onBasis}('pool')">FuelEU deficit pooled at €${num(a.pool_price_eur_per_tco2e)}/t</button></div>
+      <div class="d">The other way, the bill is ${eur(other)}.</div>` : '';
+  const year = b.year;
   return `<div class="bill">
     <div class="k">Carbon bill for ${year} emissions</div>
-    <div class="v num">${eur(total)}</div>
-    <div class="d">${euros.length ? fwd : 'No payable exposure on the current data.'}</div>
+    <div class="v num">${eur(b.total_eur)}</div>
+    <div class="d">${b.total_eur > 0 ? fwd : 'No payable exposure on the current data.'}</div>
+    ${basisChips}
   </div>
   <div class="bullets">${bars}
-    <div class="bullet"><span class="lbl">IMO NZF, 2028</span>
+    <div class="bullet"><span class="lbl">IMO NZF, ${p.nzf.year}</span>
       <span class="track" style="background:none"></span>
-      <span class="val num">$${Math.round(nzfUsd).toLocaleString('en-GB')}</span>
-      <span class="due">Scenario only. Adoption vote expected October 2026.</span></div>
+      <span class="val num">$${num(p.nzf.remedial_cost_usd)}</span>
+      <span class="due">Scenario only, not yet adopted by the IMO.</span></div>
   </div>`;
+}
+function setBasis(b) { asm.basis = b; saveAsm(); refetch(); }
+
+/* where the emissions fall, and the share each counts for: why the bill is not total CO2 x price */
+function scopeTable(d, open) {
+  const s = d.scope_split;
+  if (!s) return '';
+  const rows = s.rows.filter(r => r.co2_t > 0).map(r => `<tr><td>${h(r.label)}</td><td>${num(r.co2_t)} t</td>
+      <td>${Math.round(r.share * 100)}%</td><td>${num(r.counted_t)} t</td></tr>`).join('');
+  const rep = s.reported_t;
+  return `<details class="whatif"${open ? ' open' : ''}>
+    <summary>How the 100% and 50% rules apply to this ship</summary>
+    <div style="overflow-x:auto"><table class="data num" style="margin-top:8px">
+      <tr><th style="text-align:left">Where the CO₂ was emitted (EU MRV filing)</th><th>CO₂</th><th>Counts</th><th>Counted</th></tr>
+      ${rows}
+      <tr><td style="text-align:left"><b>EU ETS scope, our rebuild</b></td><td></td><td></td><td><b>${num(s.rebuilt_t)} t</b></td></tr>
+      ${rep != null ? `<tr><td style="text-align:left"><b>EU ETS scope, verifier-reported</b></td><td></td><td></td><td><b>${num(rep)} t</b></td></tr>` : ''}
+    </table></div>
+    <p class="dim" style="font-size:12px;margin-top:6px">Directive 2003/87/EC, Article 3ga: voyages between EU/EEA ports and
+      time at berth count in full, voyages into or out of the EU/EEA count half, the rest not at all. The register publishes
+      this split for every ship, so it is applied here; the bill then uses the verifier&rsquo;s own total. FuelEU uses the same shares.</p>
+  </details>`;
+}
+
+function eexiBlock(d) {
+  const x = d.eexi;
+  if (!x) return '';
+  const good = x.verdict.includes('COMPLIANT') && !x.verdict.includes('ABOVE');
+  const cls = x.verdict.startsWith('N/A') || x.attained === null ? 'warn' : (good ? 'good' : 'bad');
+  return `<div class="banner ${cls}" style="font-size:13.5px"><b>EEXI: ${h(x.verdict)}</b>
+    ${x.attained != null ? ` · attained ${x.attained} (${h(x.attained_basis)}) against required ${x.required}` : ''}
+    ${x.margin_pct != null ? ` · margin ${x.margin_pct > 0 ? '+' : ''}${x.margin_pct}%` : ''}</div>`;
+}
+
+function charterBlock(d) {
+  const c = d.charter;
+  if (!c) return '';
+  return `<div style="margin-top:14px"><b style="font-size:14px">Owner and time-charterer split</b>
+    <div class="dim" style="font-size:12.5px">${h(c.charter_from)} to ${h(c.charter_to)}: ${c.days_on_charter} of ${c.days_in_year} days,
+      charterer share ${(c.charterer_share * 100).toFixed(1)}%</div>
+    <div style="overflow-x:auto"><table class="data num" style="margin-top:6px">
+      <tr><th style="text-align:left">Item</th><th>Total</th><th>Charterer</th><th>Owner</th></tr>
+      ${c.lines.map(l => `<tr><td style="text-align:left">${h(l.item)}</td><td>${eur(l.total_eur)}</td>
+        <td>${eur(l.charterer_eur)}</td><td>${eur(l.owner_eur)}</td></tr>`).join('')}
+      <tr><td style="text-align:left"><b>Total</b></td><td></td><td><b>${eur(c.total_charterer_eur)}</b></td><td><b>${eur(c.total_owner_eur)}</b></td></tr>
+    </table></div>
+    <p class="dim" style="font-size:12px;margin-top:6px">${c.notes.slice(1).map(h).join(' ')}</p></div>`;
+}
+
+/* prices, FuelEU basis, repeat deficits and the charter period: all inputs, all echoed in the result */
+function asmInputs(p, a) {
+  return `<div class="fuelgrid" style="margin-top:8px">
+      <div><label for="${p}Eua">EU allowance, € per tonne</label>
+        <input id="${p}Eua" type="range" min="40" max="150" step="1" value="${a.eua}" oninput="E('${p}EuaN').value=this.value" style="padding:0">
+        <input id="${p}EuaN" type="number" min="1" max="500" step="0.5" value="${a.eua}" oninput="E('${p}Eua').value=this.value"></div>
+      <div><label for="${p}Uka">UK allowance, £ per tonne</label><input id="${p}Uka" type="number" min="1" max="500" step="0.5" value="${a.uka}"></div>
+      <div><label for="${p}Fx">€ per £</label><input id="${p}Fx" type="number" min="0.6" max="2" step="0.01" value="${a.fx}"></div>
+      <div><label for="${p}Pool">FuelEU pool price, € per tCO₂e</label><input id="${p}Pool" type="number" min="0" max="2000" step="1" value="${a.pool}"></div>
+      <div><label for="${p}Defy">Consecutive years in FuelEU deficit, including this one</label>
+        <select id="${p}Defy">${[1, 2, 3, 4, 5, 6].map(n => `<option ${+a.defy === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+    </div>
+    <div class="step" style="margin-top:12px">Time charter <span class="dim" style="font-weight:500">(optional: splits the bill between owner and charterer)</span></div>
+    <div class="fuelgrid">
+      <div><label for="${p}Cf">Charter from</label><input id="${p}Cf" type="date" value="${h(a.cfrom)}"></div>
+      <div><label for="${p}Ct">Charter to</label><input id="${p}Ct" type="date" value="${h(a.cto)}"></div>
+      <div><label for="${p}Cp">Or charterer&rsquo;s share of emissions, % (from voyage data)</label>
+        <input id="${p}Cp" type="number" min="0" max="100" step="0.1" value="${h(a.cpct)}" placeholder="pro rata by days"></div>
+    </div>`;
+}
+function readAsm(p, a) {
+  const f = id => parseFloat(E(p + id).value);
+  const out = Object.assign({}, a, {
+    eua: f('EuaN') > 0 ? f('EuaN') : a.eua, uka: f('Uka') > 0 ? f('Uka') : a.uka,
+    fx: f('Fx') > 0 ? f('Fx') : a.fx, pool: f('Pool') >= 0 ? f('Pool') : a.pool,
+    defy: parseInt(E(p + 'Defy').value, 10) || 1,
+    cfrom: E(p + 'Cf').value, cto: E(p + 'Ct').value,
+    cpct: E(p + 'Cp').value.trim() === '' ? '' : Math.max(0, Math.min(100, f('Cp')))});
+  return out;
+}
+function asmBox(d) {
+  const a = d.assumptions;
+  return `<details class="whatif" id="asmBox"${asmOpen ? ' open' : ''} ontoggle="asmOpen=this.open">
+    <summary>Prices and charter split: EU allowance €${num(a.eua_price_eur, 2).replace('.00', '')}, pool €${num(a.pool_price_eur_per_tco2e)}/t${d.charter ? ', on charter' : ''}</summary>
+    ${asmInputs('a', asm)}
+    <div class="row" style="margin-top:10px"><button class="cta" onclick="applyAsm()">Recompute</button>
+      <button class="ghost" onclick="resetAsm()">Back to defaults</button></div>
+    <p class="dim" style="font-size:12px;margin-top:8px">${h(a.notes.eua)} ${h(a.notes.pool)} ${h(a.notes.uka)} Market levels checked ${h(a.checked)}.</p>
+  </details>`;
+}
+let asmOpen = false;
+function applyAsm() { asm = readAsm('a', asm); saveAsm(); asmOpen = true; refetch(); }
+function resetAsm() { asm = Object.assign({}, ASM_DEFAULT); saveAsm(); asmOpen = true; refetch(); }
+
+function reportQs() {
+  return `x=1${currentDwt ? '&dwt=' + currentDwt : ''}${exQs()}${asmQs()}`;
+}
+function reportButtons(imo) {
+  return `<div class="row" style="margin-top:14px;flex:none">
+    <a class="ghost" style="text-decoration:none;display:inline-flex;align-items:center;flex:none" target="_blank" rel="noopener"
+       href="${API}/report/ship/${h(imo)}?${reportQs()}">Report for print or PDF &#9656;</a>
+    <a class="ghost" style="text-decoration:none;display:inline-flex;align-items:center;flex:none"
+       href="${API}/report/ship/${h(imo)}.csv?${reportQs()}">Download CSV</a></div>`;
 }
 
 function renderPartial(d, banner, keepOpen) {
-  const cb = d.fueleu.compliance_balance_tco2e;
   E('out').innerHTML = shell(`
     ${viewBar()}${banner || ''}
-    <div class="idstrip"><b>${d.vessel_name}</b> · IMO ${d.imo} · ${d.year}
-      · verified ${Math.round(d.verified.co2_tonnes).toLocaleString('en-GB')} t CO₂
-      ${d.verified.tech_efficiency ? ' · ' + d.verified.tech_efficiency : ''}</div>
-    ${billBlock(
-      [
-        {label: 'EU ETS', eur: d.ets.cost_eur,
-         due: etsDue(d.ets)},
-        ...(d.ukets && d.ukets.cost_gbp > 0 ? [{label: 'UK ETS', eur: d.ukets.cost_gbp * 1.15,
-         due: `£${Math.round(d.ukets.cost_gbp).toLocaleString('en-GB')} for UK domestic voyages. Surrender by ${d.ukets.surrender_by}.`}] : []),
-        {label: 'FuelEU', eur: d.fueleu.penalty_eur,
-         due: (cb < 0 ? `Balance ${Math.round(cb).toLocaleString('en-GB')} t. Pool it or pay by 30 June.`
-                     : `Balance +${Math.round(cb).toLocaleString('en-GB')} t. A surplus can be pooled.`) + feuCheck(d.ets)}
-      ], d.nzf.remedial_cost_usd, d.year, d.ets.surrender_share)}
+    <div class="idstrip"><b>${h(d.vessel_name)}</b> · IMO ${h(d.imo)} · ${d.year}
+      · verified ${num(d.verified.co2_tonnes)} t CO₂
+      ${d.verified.tech_efficiency ? ' · ' + h(d.verified.tech_efficiency) : ''}</div>
+    ${billBlock(d)}
+    ${asmBox(d)}
+    ${charterBlock(d)}
     <div id="teaserSlot">${teaserHtml()}</div>
     <div class="statline">
-      <span>CII rating <b class="dim">needs capacity</b>
+      <span>CII rating and EEXI <b class="dim">need capacity</b>
         <span class="dwt-up" style="display:inline-flex;margin-left:6px">
-          <input id="dwtIn" type="number" placeholder="DWT (GT for ro-ro and cruise)" style="max-width:250px">
+          <input id="dwtIn" type="number" min="1" placeholder="DWT (GT for ro-ro and cruise)" style="max-width:250px" aria-label="Deadweight">
           <button class="ghost" onclick="addDwt()">Add</button></span></span>
       <span>ETS-scope check <b class="pos num">${d.verified.ets_scope_co2_reported ?
-        Math.round(d.verified.ets_scope_co2_reported).toLocaleString('en-GB') + ' t ✓ matches verifier' : '—'}</b></span>
+        num(d.verified.ets_scope_co2_reported) + ' t ✓ verifier figure used' : '—'}</b></span>
     </div>
+    ${scopeTable(d)}
     <div id="fleetCtx"></div>
     ${whatIfBox(keepOpen)}
     ${exceptionsBox()}
+    ${reportButtons(d.imo)}
     ${claimLink(d.imo)}`, d.source);
   const di = E('dwtIn');
   if (di) di.addEventListener('keydown', e => { if (e.key === 'Enter') addDwt(); });
@@ -1191,18 +1398,10 @@ function renderFull(d, banner, keepOpen) {
   const sc = d.scorecard;
   E('out').innerHTML = shell(`
     ${viewBar()}${banner || ''}
-    <div class="idstrip"><b>${sc.vessel_name}</b> · IMO ${sc.imo_number} · ${sc.year}</div>
-    ${billBlock([
-      {label: 'EU ETS', eur: sc.ets.cost_eur,
-       due: etsDue(sc.ets)},
-      {label: 'FuelEU', eur: sc.fueleu.penalty_eur,
-       due: sc.fueleu.compliance_balance_tco2e < 0
-        ? `Balance ${Math.round(sc.fueleu.compliance_balance_tco2e).toLocaleString('en-GB')} t. Pool it or pay by 30 June.` + feuCheck(sc.ets)
-        : `Balance +${Math.round(sc.fueleu.compliance_balance_tco2e).toLocaleString('en-GB')} t. A surplus can be pooled.` + feuCheck(sc.ets)},
-      {label: 'UK ETS', eur: sc.ukets.cost_gbp * 1.15,
-       due: sc.ukets.cost_gbp > 0 ? `£${Math.round(sc.ukets.cost_gbp).toLocaleString('en-GB')} for UK domestic voyages. Surrender by ${sc.ukets.surrender_by}.`
-                                  : 'The UK scheme covers domestic UK voyages only. None appear in the EU register data.'}
-    ], sc.nzf.remedial_cost_usd, sc.year, sc.ets.surrender_share)}
+    <div class="idstrip"><b>${h(sc.vessel_name)}</b> · IMO ${h(sc.imo_number)} · ${sc.year} · ${num(currentDwt)} capacity</div>
+    ${billBlock(d)}
+    ${asmBox(d)}
+    ${charterBlock(d)}
     <div id="teaserSlot">${teaserHtml()}</div>
     <div class="statline">
       <span>CII <b class="rating-${sc.cii.rating}">${sc.cii.rating}</b>
@@ -1211,11 +1410,14 @@ function renderFull(d, banner, keepOpen) {
       <span>Compliance asset <b class="num ${sc.compliance_asset_eur > 0 ? 'pos' : ''}">${eur(sc.compliance_asset_eur)}</b></span>
     </div>
     ${ciiDetail(sc.cii)}
+    ${eexiBlock(d)}
+    ${scopeTable(d)}
     <div id="fleetCtx"></div>
     <b>Next actions</b>
-    <ol class="actions">${sc.actions.map(a => `<li>${a}</li>`).join('')}</ol>
+    <ol class="actions">${sc.actions.map(a => `<li>${h(a)}</li>`).join('')}</ol>
     ${whatIfBox(keepOpen)}
     ${exceptionsBox()}
+    ${reportButtons(sc.imo_number)}
     ${claimLink(sc.imo_number)}`, d.source);
   loadFleetCtx(sc.imo_number);
 }
@@ -1236,8 +1438,8 @@ async function loadFleetCtx(imo) {
 function fleetVerdict(sel, med) {
   if (!sel || med === null || !med) return 'How this ship compares with the rest of its company&rsquo;s fleet';
   const pct = Math.round((sel.co2_per_nm_kg / med - 1) * 100);
-  if (Math.abs(pct) < 2) return `${sel.name} emits about the same CO\u2082 per mile as the median ship of its type.`;
-  return `${sel.name} emits ${Math.abs(pct)}% ${pct > 0 ? 'more' : 'less'} CO\u2082 per mile than the median ship of its type.`;
+  if (Math.abs(pct) < 2) return `${h(sel.name)} emits about the same CO\u2082 per mile as the median ship of its type.`;
+  return `${h(sel.name)} emits ${Math.abs(pct)}% ${pct > 0 ? 'more' : 'less'} CO\u2082 per mile than the median ship of its type.`;
 }
 
 function fleetChart(d) {
@@ -1256,7 +1458,7 @@ function fleetChart(d) {
   pts.sort((a, b) => a.co2_per_nm_kg - b.co2_per_nm_kg).forEach((s, i) => {
     if (s.selected) return;
     const cx = X(s.co2_per_nm_kg), cy = top + (i % rows) * rowH + 8;
-    const t = `${s.name} · ${s.ship_type} · ${s.co2_per_nm_kg} kg CO₂/nm`;
+    const t = `${h(s.name)} · ${h(s.ship_type)} · ${s.co2_per_nm_kg} kg CO₂/nm`;
     dots += s.same_type
       ? `<circle cx="${cx}" cy="${cy}" r="5" fill="#0a6fb7" fill-opacity="0.85"><title>${t}</title></circle>`
       : `<circle cx="${cx}" cy="${cy}" r="4.5" fill="none" stroke="#586f8c" stroke-width="1.5"><title>${t}</title></circle>`;
@@ -1266,8 +1468,8 @@ function fleetChart(d) {
     const cx = X(sel.co2_per_nm_kg);
     selSvg = `<line x1="${cx}" y1="30" x2="${cx}" y2="${H - 28}" stroke="#e8590c" stroke-width="1.5" stroke-dasharray="4 3"/>
       <circle cx="${cx}" cy="${top + 8}" r="7.5" fill="#e8590c" stroke="#fff" stroke-width="1.5">
-        <title>${sel.name} (this ship) · ${sel.co2_per_nm_kg} kg CO₂/nm</title></circle>
-      <text x="${Math.min(cx, R - 130)}" y="24" fill="#b34700" font-size="12.5" font-weight="700">▼ ${sel.name}</text>`;
+        <title>${h(sel.name)} (this ship) · ${sel.co2_per_nm_kg} kg CO₂/nm</title></circle>
+      <text x="${Math.min(cx, R - 130)}" y="24" fill="#b34700" font-size="12.5" font-weight="700">▼ ${h(sel.name)}</text>`;
   }
   const medSvg = med !== null ?
     `<line x1="${X(med)}" y1="34" x2="${X(med)}" y2="${H - 28}" stroke="#586f8c" stroke-width="1" stroke-dasharray="2 4"/>
@@ -1275,7 +1477,7 @@ function fleetChart(d) {
   return `
   <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
     <div class="headline">${fleetVerdict(sel, med)}
-      <small>${d.company} &middot; ${d.fleet_size} ships with the same Document of Compliance holder</small></div>
+      <small>${h(d.company)} &middot; ${d.fleet_size} ships with the same Document of Compliance holder</small></div>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:6px">
       <line x1="${L}" y1="${H - 26}" x2="${R}" y2="${H - 26}" stroke="rgba(11,37,69,0.3)"/>
       ${medSvg}${dots}${selSvg}
@@ -1441,6 +1643,14 @@ refreshCta();
     .then(function () { spin.style.display = 'none'; });
 })();
 
+/* Tab links: carbonkeel.com/app#cii opens the calculator, #fleet the fleet view, and so on. */
+function tabFromHash() {
+  const t = (location.hash || '').slice(1);
+  if (TABS.includes(t)) showTab(t, true);
+}
+window.addEventListener('hashchange', tabFromHash);
+tabFromHash();
+
 /* ---------- fleet ---------- */
 let fleetData = null, sortKey = 'ets_cost_eur', sortDir = -1;
 function fleetImos() {
@@ -1450,7 +1660,7 @@ function fleetImos() {
 }
 function fleetReport() {
   const imos = fleetImos();
-  if (imos.length) window.open(`${API}/report?imos=${imos.join(',')}`, '_blank');
+  if (imos.length) window.open(`${API}/report?imos=${imos.join(',')}&eua_price=${asm.eua}`, '_blank');
 }
 function poolAgreement() {
   const imos = fleetImos();
@@ -1461,7 +1671,7 @@ async function fleetDash() {
   if (!imos.length) return;
   E('ferr').textContent = ''; E('fspin').style.display = 'block';
   try {
-    const r = await fetch(`${API}/api/fleet?imos=${imos.join(',')}`);
+    const r = await fetch(`${API}/api/fleet?imos=${imos.join(',')}&eua_price=${asm.eua}&pool_price=${asm.pool}`);
     if (!r.ok) { E('ferr').textContent = (await r.json()).detail; return; }
     fleetData = await r.json();
     renderFleet();
@@ -1473,58 +1683,69 @@ function renderFleet() {
     .sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : -1) * sortDir);
   const bad = fleetData.vessels.filter(v => !v.supported);
   const tot = vs.reduce((t, v) => ({ ets: t.ets + v.ets_cost_eur,
-    pen: t.pen + v.fueleu_penalty_eur, cb: t.cb + v.fueleu_cb_t }), {ets: 0, pen: 0, cb: 0});
+    pen: t.pen + v.fueleu_penalty_eur, pooled: t.pooled + v.fueleu_pooled_eur,
+    cb: t.cb + v.fueleu_cb_t }), {ets: 0, pen: 0, pooled: 0, cb: 0});
+  const a = fleetData.assumptions;
   const p = fleetData.pooling;
   const pool = p && p.avoided_penalty_eur > 0 ?
-    `<div class="banner good"><b>Pooling opportunity: ${eur(p.avoided_penalty_eur)}</b>
-     avoidable by pooling ${p.member_imos.length} ships inside the fleet (FuelEU Article 21).
+    `<div class="banner good"><b>Pooling inside the fleet avoids ${eur(p.avoided_penalty_eur)}</b>
+     of statutory penalty across ${p.member_imos.length} ships (FuelEU Article 21).
      ${p.uncovered_imos.length ? 'The remaining ' + eur(p.uncovered_penalty_eur) +
-       ' needs a surplus partner outside the fleet.' : ''}</div>` :
+       ' of penalty needs a surplus partner outside the fleet.' : ''}</div>` :
     (p && tot.cb < 0 ? `<div class="banner warn">There is no spare pooling capacity inside the fleet. The fleet&rsquo;s
-     FuelEU deficit of ${Math.round(Math.abs(tot.cb)).toLocaleString('en-GB')} t (${eur(tot.pen)})
-     needs a surplus partner outside the fleet, or biofuel.</div>` : '');
+     FuelEU deficit of ${num(Math.abs(tot.cb))} t is ${eur(tot.pen)} at the statutory penalty, or about
+     ${eur(tot.pooled)} bought from an outside pool at €${num(a.pool_price_eur_per_tco2e)}/t.</div>` : '');
   const th = (label, k) => `<th onclick="sortFleet('${k}')">${label}
       ${sortKey === k ? (sortDir < 0 ? '▼' : '▲') : ''}</th>`;
   const money = v => v.ets_cost_eur + v.fueleu_penalty_eur;
   const totalMoney = vs.reduce((t, v) => t + money(v), 0) || 1;
-  const biggest = [...vs].sort((a, b) => money(b) - money(a))[0];
-  const opps = [...vs].filter(v => v.lever_saving_eur > 0).sort((a, b) => b.lever_saving_eur - a.lever_saving_eur).slice(0, 5);
+  const biggest = [...vs].sort((x, y) => money(y) - money(x))[0];
+  const opps = [...vs].filter(v => v.lever_saving_eur > 0).sort((x, y) => y.lever_saving_eur - x.lever_saving_eur).slice(0, 5);
   const oppMax = opps.length ? opps[0].lever_saving_eur : 1, oppTotal = vs.reduce((t, v) => t + (v.lever_saving_eur || 0), 0);
   const oppHtml = opps.length ? `<div class="opps"><h3>Top opportunities</h3>
     <div class="dim" style="font-size:12.5px;margin-bottom:6px">Carbon cost a standard lever package would remove, per ship
       (20% biofuel on EU voyages and a 10% lower speed). Modelled, before the cost of the biofuel. Fleet total: up to ${eur(oppTotal)} a year.</div>
-    ${opps.map((v, i) => `<div class="opp" onclick="showTab('vessel');E('q').value='${v.name.replace(/'/g, "\\'")}';pick('${v.imo}')">
-      <span class="rk">${i + 1}</span><span style="font-weight:700">${v.name}</span>
+    ${opps.map((v, i) => `<div class="opp" data-imo="${h(v.imo)}" data-name="${h(v.name)}" role="button" tabindex="0">
+      <span class="rk">${i + 1}</span><span style="font-weight:700">${h(v.name)}</span>
       <span class="tr"><i style="width:${Math.max(3, v.lever_saving_eur / oppMax * 100)}%"></i></span>
       <span class="v">${eur(v.lever_saving_eur)}</span></div>`).join('')}</div>` : '';
   E('fout').innerHTML = `<div class="card">
     <span class="estimate-band" onclick="showTab('method')">ESTIMATE: public EU MRV data (${srcLabel(fleetData.source)})</span>
     <h1>Fleet analysis <span class="dim">${vs.length} ships</span></h1>
-    <div class="headline">Your ${vs.length} ships carry about ${eur(totalMoney)} a year in carbon cost.
-      <small>${biggest ? biggest.name + ' is ' + Math.round(money(biggest) / totalMoney * 100) + '% of it.' : ''}</small></div>
+    <div class="headline">Your ${vs.length} ships carry about ${eur(totalMoney)} a year in carbon cost at the statutory FuelEU penalty,
+      or ${eur(tot.ets + tot.pooled)} with FuelEU deficits pooled.
+      <small>${biggest ? h(biggest.name) + ' is ' + Math.round(money(biggest) / totalMoney * 100) + '% of it.' : ''}
+        EU allowances at €${num(a.eua_price_eur)}; pool price €${num(a.pool_price_eur_per_tco2e)}/t (change them on any ship&rsquo;s result).</small></div>
     <div class="scores">
       <div class="score"><div class="k">EU ETS bill (fleet)</div><div class="v num">${eur(tot.ets)}</div></div>
-      <div class="score"><div class="k">FuelEU penalty risk</div><div class="v num">${eur(tot.pen)}</div></div>
+      <div class="score"><div class="k">FuelEU, statutory penalty</div><div class="v num">${eur(tot.pen)}</div></div>
+      <div class="score"><div class="k">FuelEU, if pooled</div><div class="v num">${eur(tot.pooled)}</div></div>
       <div class="score"><div class="k">FuelEU balance</div>
-        <div class="v num ${tot.cb < 0 ? 'neg' : 'pos'}">${Math.round(tot.cb).toLocaleString('en-GB')} t</div></div>
+        <div class="v num ${tot.cb < 0 ? 'neg' : 'pos'}">${num(tot.cb)} t</div></div>
     </div>
     ${pool}
     ${oppHtml}
     <div style="overflow-x:auto"><table class="data num">
       <tr>${th('Ship', 'name')}${th('CO₂ per nm', 'co2_per_nm_kg')}${th('CO₂ (t)', 'co2_tonnes')}
-        ${th('EUAs', 'euas')}${th('ETS (€)', 'ets_cost_eur')}${th('FuelEU (t)', 'fueleu_cb_t')}${th('Penalty (€)', 'fueleu_penalty_eur')}</tr>
-      ${vs.map(v => `<tr class="rowlink" onclick="showTab('vessel');E('q').value='${v.name.replace(/'/g, "\\'")}';pick('${v.imo}')">
-        <td style="color:var(--accent);font-weight:700">${v.name}</td>
+        ${th('EUAs', 'euas')}${th('ETS (€)', 'ets_cost_eur')}${th('FuelEU (t)', 'fueleu_cb_t')}${th('Penalty (€)', 'fueleu_penalty_eur')}${th('If pooled (€)', 'fueleu_pooled_eur')}</tr>
+      ${vs.map(v => `<tr class="rowlink" data-imo="${h(v.imo)}" data-name="${h(v.name)}" tabindex="0">
+        <td style="color:var(--accent);font-weight:700">${h(v.name)}</td>
         <td>${v.co2_per_nm_kg ?? '—'}</td>
-        <td>${Math.round(v.co2_tonnes).toLocaleString('en-GB')}</td>
-        <td>${Math.round(v.euas).toLocaleString('en-GB')}</td>
-        <td>${Math.round(v.ets_cost_eur).toLocaleString('en-GB')}</td>
-        <td class="${v.fueleu_cb_t < 0 ? 'neg' : 'pos'}">${Math.round(v.fueleu_cb_t).toLocaleString('en-GB')}</td>
-        <td>${Math.round(v.fueleu_penalty_eur).toLocaleString('en-GB')}</td></tr>`).join('')}
+        <td>${num(v.co2_tonnes)}</td>
+        <td>${num(v.euas)}</td>
+        <td>${num(v.ets_cost_eur)}</td>
+        <td class="${v.fueleu_cb_t < 0 ? 'neg' : 'pos'}">${v.fueleu_applicable === false ? 'n/a' : num(v.fueleu_cb_t)}</td>
+        <td>${num(v.fueleu_penalty_eur)}</td>
+        <td>${num(v.fueleu_pooled_eur)}</td></tr>`).join('')}
     </table></div>
     ${bad.length ? `<div class="dim" style="font-size:12.5px;margin-top:8px">
-      Not scored (type not yet supported): ${bad.map(v => v.imo).join(', ')}</div>` : ''}
+      Not scored (type not yet supported, or figures hidden at the operator&rsquo;s request): ${bad.map(v => h(v.imo)).join(', ')}</div>` : ''}
   </div>`;
+  for (const el of E('fout').querySelectorAll('[data-imo]')) {
+    const go = () => { showTab('vessel'); E('q').value = el.dataset.name; pick(el.dataset.imo); };
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  }
 }
 
 /* ---------- calendar (U5: timeline + soon-alert) ---------- */
@@ -1644,8 +1865,23 @@ async function loadMethod() {
   const md = await r.text();
   E('methodOut').innerHTML = METHOD_EQS + mdToHtml(md);
 }
-/* ================= CII calculator (locked) ================= */
-let ciiKey = localStorage.getItem('ck_key') || '', ciiMode = 'fuel';
+/* ================= Your-data calculator ================= */
+let ciiKey = '';
+try { ciiKey = localStorage.getItem('ck_key') || ''; } catch (e) { /* storage blocked */ }
+let ciiMode = 'fuel', keyRequired = false, lastCalc = null;
+let casm = Object.assign({}, asm, {basis: 'penalty', cfrom: '', cto: '', cpct: ''});
+
+(async function initAccess() {
+  try {
+    const r = await fetch(`${API}/api/access/status`);
+    keyRequired = !!(await r.json()).required;
+  } catch (e) { keyRequired = false; }
+  E('ciiLockTag').style.display = keyRequired ? '' : 'none';
+  E('ciiLockBtn').style.display = keyRequired ? '' : 'none';
+  if (keyRequired && !(ciiKey && await unlockCii(true))) {
+    E('ciiApp').style.display = 'none'; E('ciiLocked').style.display = 'block';
+  }
+})();
 
 async function unlockCii(silent) {
   const key = silent ? ciiKey : E('ciiKey').value.trim();
@@ -1655,7 +1891,8 @@ async function unlockCii(silent) {
     if (!r.ok) { if (!silent) E('ciiKeyErr').textContent = (await r.json()).detail;
                  return false; }
     const d = await r.json();
-    ciiKey = key; localStorage.setItem('ck_key', key);
+    ciiKey = key;
+    try { localStorage.setItem('ck_key', key); } catch (e) { /* ignore */ }
     E('ciiLocked').style.display = 'none';
     E('ciiApp').style.display = 'block';
     E('ciiWho').textContent = d.issued_to ? '· ' + d.issued_to : '';
@@ -1665,7 +1902,8 @@ async function unlockCii(silent) {
                 return false; }
 }
 function lockCii() {
-  ciiKey = ''; localStorage.removeItem('ck_key');
+  ciiKey = '';
+  try { localStorage.removeItem('ck_key'); } catch (e) { /* ignore */ }
   E('ciiApp').style.display = 'none'; E('ciiLocked').style.display = 'block';
   E('ciiKey').value = ''; E('ciiOut').innerHTML = '';
 }
@@ -1676,19 +1914,133 @@ function setCiiMode(m) {
   E('ciiFuelInputs').style.display = m === 'fuel' ? 'block' : 'none';
   E('ciiSpeedInputs').style.display = m === 'speed' ? 'block' : 'none';
 }
-wireChips('ciiTypeChips');
+
+/* ---- voyage-scope split: live remainder ---- */
+const SCOPE_IDS = [['sc_intra', 'intra_eea'], ['sc_extra', 'extra_eea'], ['sc_berth', 'berth_eea'],
+                   ['sc_uk', 'uk_domestic'], ['sc_gbni', 'uk_gb_ni']];
+function scopeValues() {
+  const o = {};
+  for (const [id, k] of SCOPE_IDS) o[k] = Math.max(0, parseFloat(E(id).value) || 0);
+  return o;
+}
+function refreshScope() {
+  const s = Object.values(scopeValues()).reduce((a, b) => a + b, 0);
+  const el = E('sc_rest');
+  el.textContent = s > 100 ? `over by ${num(s - 100, 1)}%` : `${num(100 - s, 1)}%`;
+  el.style.color = s > 100 ? 'var(--red)' : '';
+}
+for (const [id] of SCOPE_IDS) E(id).addEventListener('input', refreshScope);
+
+/* ---- G5: only the corrections the guideline allows for this ship type ---- */
+const G5_KINDS = [
+  ['voyage_safety', 'Voyage in a situation that endangered safe navigation (MARPOL Annex VI reg. 3.1)', 'G5 para 4.1.1', () => true, 'voyage'],
+  ['voyage_ice', 'Ice-classed ship sailing within the ice edge', 'G5 para 4.1.2', () => !!E('ciiIce').value, 'voyage'],
+  ['electrical_reefer', 'Electrical load of refrigerated containers', 'G5 para 4.3.1, Appendix 1 Part A.1', () => true, 'factor'],
+  ['electrical_cooling', 'Cargo cooling or reliquefaction (electrical)', 'G5 para 4.3.2', t => t === 'gas_carrier' || t === 'lng_carrier', 'factor'],
+  ['electrical_discharge', 'Electric cargo discharge pumps', 'G5 para 4.3.3', t => t === 'tanker', 'factor'],
+  ['boiler', 'Oil-fired boiler for cargo heating or steam cargo pumps', 'G5 para 4.4', t => t === 'tanker', 'factor'],
+  ['others', 'Standalone engine-driven cargo pumps during discharge', 'G5 para 4.5', t => t === 'tanker', 'factor'],
+  ['sts', 'Ship-to-ship voyages (each leg 600 nm or less and 72 hours or less)', 'G5 paras 2.8 and 4.2', t => t === 'tanker', 'sts'],
+];
+const G5_HELP = {
+  voyage: 'Fuel and distance of the voyage period both come out of the CII. Keep the logbook positions and times; for ice, keep the ice charts.',
+  factor: 'Counts at (0.75 − 0.03 × years since 2023) of the fuel entered. Measure it by kWh meter, flow meter or tank soundings.',
+  sts: 'The fuel used on STS voyages is reduced by the correction factor 6.1742 × DWT^−0.246. Cannot be combined with the electrical, boiler and pump deductions.',
+};
+const FUEL_OPTS = [['hfo', 'HFO'], ['lfo', 'VLSFO / LFO'], ['mdo_mgo', 'MDO / MGO'], ['lng', 'LNG'], ['methanol', 'Methanol']];
+let g5State = {};
+function saveG5State() {
+  for (const [k] of G5_KINDS) {
+    if (!E('g5t_' + k)) continue;
+    g5State[k] = {fuel: E('g5f_' + k).value, tonnes: E('g5t_' + k).value,
+                  dist: E('g5d_' + k) ? E('g5d_' + k).value : '', basis: E('g5b_' + k).value};
+  }
+  g5State._shuttle = E('g5Shuttle') ? E('g5Shuttle').checked : false;
+  g5State._selfun = E('g5SelfUn') ? E('g5SelfUn').checked : false;
+}
+function renderG5() {
+  saveG5State();
+  const t = chipValue('ciiTypeChips');
+  const on = G5_KINDS.filter(k => k[3](t)), off = G5_KINDS.filter(k => !k[3](t));
+  E('g5Lines').innerHTML = on.map(([k, label, src, , kind]) => {
+    const st = g5State[k] || {};
+    const fuelSel = `<select id="g5f_${k}" aria-label="Fuel for ${h(label)}">${FUEL_OPTS.map(([v, l]) =>
+      `<option value="${v}" ${(st.fuel || 'hfo') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+    const reefer = k === 'electrical_reefer' ? `<div class="dwt-up" style="margin-top:4px">
+        <label class="dim" for="g5rd" style="font-size:12px">No kWh meter? In-use reefer-days</label>
+        <input id="g5rd" type="number" min="0" placeholder="e.g. 12,000">
+        <select id="g5rs" aria-label="Engine type for the default SFOC"><option value="175">2-stroke, 175 g/kWh</option><option value="200">4-stroke, 200 g/kWh</option></select>
+        <button class="ghost" type="button" onclick="fillReefer()">Work out tonnes</button></div>` : '';
+    return `<div style="border-top:1px solid var(--line2);padding:10px 0">
+      <div style="font-size:14px;font-weight:700">${h(label)} <span class="dim" style="font-weight:500;font-size:12px">· ${h(src)}</span></div>
+      <div class="dim" style="font-size:12px;margin:2px 0 6px">${G5_HELP[kind]}</div>
+      <div class="row">${fuelSel}
+        <input id="g5t_${k}" type="number" min="0" step="0.1" placeholder="Fuel, tonnes" value="${h(st.tonnes || '')}" aria-label="Tonnes for ${h(label)}">
+        ${kind === 'voyage' ? `<input id="g5d_${k}" type="number" min="0" step="1" placeholder="Distance in that period, nm" value="${h(st.dist || '')}" aria-label="Distance for ${h(label)}">` : ''}
+        <input id="g5b_${k}" maxlength="300" placeholder="Evidence, e.g. logbook ref." value="${h(st.basis || '')}" aria-label="Evidence for ${h(label)}"></div>
+      ${reefer}</div>`;
+  }).join('') + (off.length ? `<p class="dim" style="font-size:12px;margin-top:6px">Not available for this ship type:
+      ${off.map(k => h(k[1].toLowerCase())).join('; ')}${!E('ciiIce').value ? ' (the ice adjustment needs an ice class above)' : ''}.</p>` : '');
+  E('g5Flags').innerHTML = (t === 'tanker' ? `<label style="display:flex;gap:8px;align-items:center;font-size:14px;flex:none">
+      <input id="g5Shuttle" type="checkbox" style="width:auto;min-height:0" ${g5State._shuttle ? 'checked' : ''}>
+      Shuttle tanker with dynamic positioning (G5 para 2.9: correction 5.6805 × DWT^−0.208 on all fuel)</label>` : '')
+    + (t === 'bulk_carrier' ? `<label style="display:flex;gap:8px;align-items:center;font-size:14px;flex:none">
+      <input id="g5SelfUn" type="checkbox" style="width:auto;min-height:0" ${g5State._selfun ? 'checked' : ''}>
+      Self-unloading bulk carrier (allows fiVSE)</label>` : '');
+}
+function fillReefer() {
+  const days = parseFloat(E('g5rd').value) || 0, sfoc = parseFloat(E('g5rs').value) || 175;
+  E('g5t_electrical_reefer').value = (2.75 * 24 * sfoc * days / 1e6).toFixed(2);
+}
+function g5Payload() {
+  saveG5State();
+  const deductions = [];
+  for (const [k] of G5_KINDS) {
+    const st = g5State[k];
+    if (!st || !E('g5t_' + k)) continue;
+    const t = parseFloat(st.tonnes) || 0, d = parseFloat(st.dist) || 0;
+    if (t > 0 || d > 0) deductions.push({kind: k, fuel: st.fuel || 'hfo', tonnes: t, distance_nm: d, basis: st.basis.trim()});
+  }
+  const f = id => parseFloat(E(id).value) || 1;
+  const ice = E('ciiIce').value;
+  return {deductions, shuttle_tanker: !!g5State._shuttle, self_unloading: !!g5State._selfun,
+          ice_class: ice === 'other' ? 'other ice class' : ice,
+          fi: f('g5_fi'), fm: f('g5_fm'), fc: f('g5_fc'), fivse: f('g5_fivse')};
+}
+wireChips('ciiTypeChips', renderG5);
+E('ciiIce').addEventListener('change', renderG5);
+
+function renderCalcAsm() {
+  E('calcAsm').innerHTML = asmInputs('c', casm) + `
+    <div class="fuelgrid" style="margin-top:8px">
+      <div><label for="cDer">EU ETS derogation, % of EU emissions (island, outermost-region or public-service routes)</label>
+        <input id="cDer" type="number" min="0" max="100" step="1" placeholder="0"></div>
+    </div>
+    <p class="dim" style="font-size:12px;margin-top:6px">Ice class IA or IA Super above also takes 5% off the EU allowances
+      until 2030 (Directive Art. 12(3-e)). Allowance and pool prices are assumptions; set your own.</p>
+    <div class="chips" style="margin-top:8px" id="cBasis">
+      <button data-v="penalty" class="${casm.basis === 'pool' ? '' : 'on'}">Count FuelEU at the statutory penalty</button>
+      <button data-v="pool" class="${casm.basis === 'pool' ? 'on' : ''}">Count FuelEU deficit as pooled</button></div>`;
+  wireChips('cBasis');
+}
 
 function fillCiiExample() {
   document.querySelector('#ciiTypeChips button[data-v="bulk_carrier"]').click();
   E('ciiName').value = 'MV EXAMPLE'; E('ciiCap').value = 50000;
   E('ciiYear').value = '2026';
   setCiiMode('fuel');
-  E('f_hfo').value = 4300; E('f_mdo_mgo').value = ''; E('ciiDist').value = 50000;
+  for (const f of ['hfo', 'lfo', 'mdo_mgo', 'lng', 'methanol', 'biofuel_b100']) E('f_' + f).value = '';
+  E('f_hfo').value = 4300; E('f_mdo_mgo').value = 300; E('ciiDist').value = 50000;
+  E('sc_intra').value = 30; E('sc_extra').value = 45; E('sc_berth').value = 8; E('sc_uk').value = ''; E('sc_gbni').value = '';
+  refreshScope();
   runCii();
 }
 
 async function runCii() {
   E('ciiErr').textContent = '';
+  const ice = E('ciiIce').value;
+  casm = readAsm('c', casm);
+  casm.basis = chipValue('cBasis') || 'penalty';
   const body = {
     ship_type: chipValue('ciiTypeChips'),
     dwt: parseFloat(E('ciiCap').value) || 0,
@@ -1696,15 +2048,22 @@ async function runCii() {
     year: parseInt(E('ciiYear').value, 10),
     vessel_name: E('ciiName').value.trim(),
     imo_number: E('ciiImo').value.trim(),
-    excluded_co2_t: parseFloat(E('g5_co2').value) || 0,
-    excluded_distance_nm: parseFloat(E('g5_dist').value) || 0,
-    capacity_correction: parseFloat(E('g5_cap').value) || 1.0,
-    corrections_basis: E('g5_basis').value.trim(),
     fuel_tonnes: {}, distance_nm: 0,
+    g5: g5Payload(),
+    scope: scopeValues(),
+    engine_type: E('ciiEngine').value,
+    eua_price: casm.eua, uka_price: casm.uka, eur_per_gbp: casm.fx, pool_price: casm.pool,
+    deficit_years: casm.defy, fueleu_basis: casm.basis,
+    ice_class_ia: ice === 'IA' || ice === 'IA Super',
+    derogation_pct: Math.max(0, Math.min(100, parseFloat(E('cDer').value) || 0)),
   };
-  if (!body.dwt && !body.gt) { E('ciiErr').textContent = 'Enter the ship\u2019s capacity: DWT, or GT for ro-ro, ro-pax, cruise and vehicle carriers.'; return; }
+  if (casm.cfrom && casm.cto) { body.charter_from = casm.cfrom; body.charter_to = casm.cto;
+    if (casm.cpct !== '') body.charter_pct = casm.cpct; }
+  else if (casm.cfrom || casm.cto) { E('ciiErr').textContent = 'Give both charter dates, or neither.'; return; }
+  if (!body.dwt && !body.gt) { E('ciiErr').textContent = 'Enter the ship’s capacity: DWT, or GT for ro-ro, ro-pax, cruise and vehicle carriers.'; return; }
+  if (Object.values(body.scope).reduce((a, b) => a + b, 0) > 100) { E('ciiErr').textContent = 'The voyage shares add up to more than 100%.'; return; }
   if (ciiMode === 'fuel') {
-    for (const f of ['hfo','lfo','mdo_mgo','lng','methanol','biofuel_b100']) {
+    for (const f of ['hfo', 'lfo', 'mdo_mgo', 'lng', 'methanol', 'biofuel_b100']) {
       const v = parseFloat(E('f_' + f).value);
       if (v > 0) body.fuel_tonnes[f] = v;
     }
@@ -1720,29 +2079,32 @@ async function runCii() {
       aux_t_per_day_at_sea: parseFloat(E('sp_aux_sea').value) || 0,
       port_days: parseFloat(E('sp_port_days').value) || 0,
       aux_t_per_day_in_port: parseFloat(E('sp_aux_port').value) || 0,
+      speed_exponent: parseFloat(E('sp_exp').value) || 3,
     };
     if (!sp.ref_cons_t_per_day || !sp.ref_speed_kn || !sp.actual_speed_kn || !sp.sea_days) {
       E('ciiErr').textContent = 'Reference consumption, reference speed, actual speed and sea days are all required.'; return; }
     body.speed = sp;
     body.distance_nm = parseFloat(E('ciiDist2').value) || 0;
   }
-  E('ciiGo').disabled = true; E('ciiGo').textContent = 'Computing…';
+  E('ciiGo').disabled = true; E('ciiGo').textContent = 'Working it out…';
   try {
-    const r = await fetch(`${API}/api/cii/compute?key=${encodeURIComponent(ciiKey)}`, {
+    const r = await fetch(`${API}/api/calc${keyRequired ? '?key=' + encodeURIComponent(ciiKey) : ''}`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body)});
     const d = await r.json();
-    if (!r.ok) { E('ciiErr').textContent = d.detail || 'The calculation failed. Please check your figures and try again.'; return; }
-    renderCii(d);
+    if (!r.ok) { E('ciiErr').textContent = typeof d.detail === 'string' ? d.detail
+                   : 'One of the values is outside the allowed range. Check the figures and try again.'; return; }
+    lastCalc = d;
+    renderCalc(d);
   } catch (e) { E('ciiErr').textContent = 'Something went wrong. Please try again.'; }
-  finally { E('ciiGo').disabled = false; E('ciiGo').textContent = 'Compute CII'; }
+  finally { E('ciiGo').disabled = false; E('ciiGo').textContent = 'Work it out'; }
 }
 
 const BAND_COLOR = {A: '#34d399', B: '#86efac', C: '#fbbf24', D: '#fb923c', E: '#f87171'};
 /* the same bands as text on white: darker, so they stay readable */
 const BAND_TEXT = {A: '#0f7a52', B: '#3a7d0a', C: '#9a5b00', D: '#b34700', E: '#b42318'};
 
-function renderCii(d) {
+function ciiHtml(d) {
   const b = d.boundaries;
   const segs = [['A', 0, b.A], ['B', b.A, b.B], ['C', b.B, b.C],
                 ['D', b.C, b.D], ['E', b.D, b.D * 1.25]];
@@ -1751,7 +2113,7 @@ function renderCii(d) {
   const traj = d.trajectory.map(p => `<div style="background:${BAND_COLOR[p.rating]};
       color:#04211c"><span class="yr">${p.year}</span>${p.rating}</div>`).join('');
   const fuelLine = Object.entries(d.fuel_tonnes)
-    .map(([f, t]) => `${f.toUpperCase().replace('_','/')} ${t.toLocaleString('en-GB')} t`).join(' · ');
+    .map(([f, t]) => `${h(f.toUpperCase().replace('_', '/'))} ${num(t, 1)} t`).join(' · ');
   const nextBand = d.gap_to_next_band_pct !== null
     ? `<div class="banner ${d.rating === 'E' || d.rating === 'D' ? 'bad' : 'warn'}">
         Cutting CO₂ by <b>${d.gap_to_next_band_pct}%</b> moves the ship up one band
@@ -1759,20 +2121,19 @@ function renderCii(d) {
         ${d.rating === 'E' && d.reduction_to_reach.C > 0 ? 'Reaching C needs a cut of ' + d.reduction_to_reach.C + '%.' : ''}</div>`
     : `<div class="banner good">Top band: no reduction is needed to meet this year&rsquo;s
         target. Watch the trajectory below, because the target tightens every year.</div>`;
-  E('ciiOut').innerHTML = `<div class="card">
-    <span class="estimate-band${d.estimated_inputs ? '' : ' own'}">
-      ${d.estimated_inputs ? 'ESTIMATE: fuel worked out from speed' : 'OWNER DATA: calculated from your figures'}</span>
-    <div class="idstrip"><b>${d.vessel_name || 'Ship'}</b>
-      ${d.imo_number ? '· IMO ' + d.imo_number : ''} · ${d.ship_type.replace(/_/g,' ')}
-      · ${Math.round(d.capacity).toLocaleString('en-GB')} ${d.capacity_basis} · ${d.year}</div>
-
+  const g5 = (d.g5_lines || []).length ? `<details class="whatif" open><summary>G5 corrections applied</summary>
+      <div style="overflow-x:auto"><table class="data num" style="margin-top:8px">
+        <tr><th style="text-align:left">Correction</th><th>Fuel</th><th>Entered (t)</th><th>Weight</th><th>CO₂ removed (t)</th><th>Distance removed (nm)</th></tr>
+        ${d.g5_lines.map(l => `<tr><td style="text-align:left">${h(l.label)}<br><span class="dim" style="font-size:11.5px">${h(l.source)}</span></td>
+          <td>${h(l.fuel.toUpperCase())}</td><td>${num(l.tonnes, 1)}</td><td>${l.weight}</td><td>${num(l.co2_deducted_t, 1)}</td><td>${num(l.distance_nm)}</td></tr>`).join('')}
+      </table></div></details>` : '';
+  return `
     <div class="bill">
       <div class="k">Attained CII rating (${d.year})</div>
       <div class="v" style="color:${BAND_TEXT[d.rating]}">${d.rating}</div>
       <div class="d num">attained ${d.attained}, required ${d.required} (gCO₂/${d.capacity_basis.toLowerCase()}·nm)
         · ratio ${d.ratio} · Z = ${d.z_factor_pct}%</div>
     </div>
-
     <div class="ciibar">${segs.map(([l, lo, hi]) =>
       `<div style="flex:${(hi - lo) / max};background:${BAND_COLOR[l]}">${l}</div>`).join('')}</div>
     <div style="position:relative;height:18px;margin-top:-6px">
@@ -1780,32 +2141,107 @@ function renderCii(d) {
         ▲ ${d.attained}</div></div>
     <div class="ciilabels"><span class="num">boundaries A≤${b.A} · B≤${b.B} · C≤${b.C} · D≤${b.D}</span>
       <span class="num">reference line ${d.reference}</span></div>
-
     ${nextBand}
-
     <b style="font-size:14px">Rating trajectory at today&rsquo;s performance</b>
     <div class="dim" style="font-size:12.5px">Same ship, same operation. Only the IMO
-      target moves (the reduction factor Z rises to 21.5% by 2030).</div>
+      target moves (the reduction factor Z rises to 21.5% by 2030)${(d.g5_lines || []).length ? ', and the G5 share for electrical and boiler fuel falls 0.03 a year' : ''}.</div>
     <div class="traj">${traj}</div>
-
     <div class="statline">
-      <span>CO₂ <b class="num">${d.co2_tonnes.toLocaleString('en-GB')} t</b></span>
-      <span>Distance <b class="num">${Math.round(d.distance_nm).toLocaleString('en-GB')} nm</b></span>
+      <span>CO₂ in the CII <b class="num">${num(d.co2_tonnes, 1)} t</b></span>
+      <span>Distance <b class="num">${num(d.distance_nm)} nm</b></span>
       <span>Fuel <b class="num">${fuelLine}</b></span>
     </div>
-    <details class="whatif" open>
+    ${g5}
+    <details class="whatif">
       <summary>Reduction needed to reach each band</summary>
       <table class="data num" style="margin-top:8px">
         <tr><th style="text-align:left">Band</th><th>Boundary (gCO₂/cap·nm)</th><th>CO₂ cut needed</th></tr>
-        ${['A','B','C','D'].map(k => `<tr><td style="text-align:left">${k}</td>
+        ${['A', 'B', 'C', 'D'].map(k => `<tr><td style="text-align:left">${k}</td>
           <td>${b[k]}</td><td>${d.reduction_to_reach[k] > 0
             ? d.reduction_to_reach[k] + '%' : '<span class="pos">already met</span>'}</td></tr>`).join('')}
       </table>
     </details>
-    <div class="dim" style="font-size:12px;margin-top:12px">${d.notes.join('<br>')}</div>
+    <div class="dim" style="font-size:12px;margin-top:12px">${d.notes.map(h).join('<br>')}</div>`;
+}
+
+function renderCalc(d) {
+  const c = d.cii;
+  const rows = d.scope_rows.map(r => `<tr><td style="text-align:left">${h(r.label)}</td><td>${num(r.pct, 1)}%</td>
+      <td>${num(r.fuel_t, 1)} t</td><td style="text-align:left">${h(r.rule)}</td></tr>`).join('');
+  E('ciiOut').innerHTML = `<div class="card" id="calcCard">
+    <span class="estimate-band${c.estimated_inputs ? '' : ' own'}">
+      ${c.estimated_inputs ? 'ESTIMATE: fuel worked out from speed' : 'YOUR DATA: worked out from your figures'}</span>
+    <div class="idstrip"><b>${h(c.vessel_name || 'Ship')}</b>
+      ${c.imo_number ? '· IMO ' + h(c.imo_number) : ''} · ${h(c.ship_type.replace(/_/g, ' '))}
+      · ${num(c.capacity)} ${c.capacity_basis} · ${c.year}</div>
+    ${ciiHtml(c)}
+    <h2 style="font-size:18px;margin:22px 0 4px">Carbon bill from your fuel</h2>
+    ${billBlock(d, 'setCalcBasis')}
+    <details class="whatif" open><summary>How the fuel was split by voyage scope</summary>
+      <div style="overflow-x:auto"><table class="data num" style="margin-top:8px">
+        <tr><th style="text-align:left">Where</th><th>Share</th><th>Fuel</th><th style="text-align:left">Counts</th></tr>${rows}</table></div>
+      <p class="dim" style="font-size:12px;margin-top:6px">G5 corrections change the CII only. The EU ETS, UK ETS and FuelEU
+        bill uses all the fuel you entered, by scope. Prices: EU allowance €${d.assumptions.eua_price_eur},
+        UK allowance £${d.assumptions.uka_price_gbp}, pool €${d.assumptions.pool_price_eur_per_tco2e}/t.</p></details>
+    ${charterBlock(d)}
+    <div class="row noprint" style="margin-top:14px">
+      <button class="ghost" style="flex:none" onclick="printCalc()">Print or save as PDF</button>
+      <button class="ghost" style="flex:none" onclick="calcCsv()">Download CSV</button></div>
   </div>`;
   E('ciiOut').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
+function setCalcBasis(b) {
+  const chips = E('cBasis');
+  if (chips) for (const x of chips.querySelectorAll('button')) x.classList.toggle('on', x.dataset.v === b);
+  runCii();
+}
+function printCalc() {
+  document.body.classList.add('print-calc');
+  const done = () => { document.body.classList.remove('print-calc'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  window.print();
+  setTimeout(done, 1500);
+}
+const csvCell = v => {
+  let s = String(v == null ? '' : v);
+  if (/^[=+@\t\r]/.test(s) || /^-[^0-9]/.test(s)) s = "'" + s;
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+function calcCsv() {
+  const d = lastCalc;
+  if (!d) return;
+  const c = d.cii, b = d.bill, rows = [['section', 'item', 'value']];
+  const add = (s, k, v) => rows.push([s, k, v]);
+  add('Ship', 'Name', c.vessel_name); add('Ship', 'IMO', c.imo_number); add('Ship', 'Type', c.ship_type);
+  add('Ship', 'Capacity', `${c.capacity} ${c.capacity_basis}`); add('Ship', 'Year', c.year);
+  add('Ship', 'Inputs', c.estimated_inputs ? 'estimated from speed' : 'operator data');
+  add('CII', 'Rating', c.rating); add('CII', 'Attained', c.attained); add('CII', 'Required', c.required);
+  add('CII', 'Ratio', c.ratio); add('CII', 'Z factor %', c.z_factor_pct); add('CII', 'CO2 in CII (t)', c.co2_tonnes);
+  add('CII', 'Distance (nm)', c.distance_nm);
+  for (const p of c.trajectory) add('CII trajectory', p.year, p.rating);
+  for (const l of c.g5_lines || []) add('G5', l.label, `${l.tonnes} t ${l.fuel} x ${l.weight} = ${l.co2_deducted_t} t CO2; ${l.distance_nm} nm (${l.source})`);
+  for (const r of d.scope_rows) add('Voyage scope', r.label, `${r.pct}% (${r.fuel_t} t fuel), ${r.rule}`);
+  add('Bill', 'EU ETS (EUR)', b.ets_eur); add('Bill', 'EU allowances due', d.ets.allowances_due);
+  add('Bill', 'UK ETS (EUR)', b.ukets_eur); add('Bill', 'UK ETS (GBP)', d.ukets.cost_gbp);
+  add('Bill', 'FuelEU compliance balance (tCO2e)', d.fueleu.compliance_balance_tco2e);
+  add('Bill', 'FuelEU statutory penalty (EUR)', b.fueleu_penalty_eur); add('Bill', 'FuelEU if pooled (EUR)', b.fueleu_pooled_eur);
+  add('Bill', 'Total, FuelEU at penalty (EUR)', b.total_penalty_eur); add('Bill', 'Total, FuelEU pooled (EUR)', b.total_pooled_eur);
+  add('Bill', 'IMO NZF scenario (USD)', d.nzf.remedial_cost_usd);
+  if (d.charter) for (const l of d.charter.lines) add('Charter split', l.item, `charterer ${l.charterer_eur}; owner ${l.owner_eur}`);
+  const a = d.assumptions;
+  add('Assumptions', 'EU allowance (EUR/t)', a.eua_price_eur); add('Assumptions', 'UK allowance (GBP/t)', a.uka_price_gbp);
+  add('Assumptions', 'EUR per GBP', a.eur_per_gbp); add('Assumptions', 'FuelEU pool price (EUR/tCO2e)', a.pool_price_eur_per_tco2e);
+  const blob = new Blob(['﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')], {type: 'text/csv;charset=utf-8'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `carbonkeel-${(c.imo_number || c.vessel_name || 'ship').replace(/[^\w-]+/g, '_')}-${c.year}.csv`;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+renderG5();
+renderCalcAsm();
+refreshScope();
 
 async function loadPrivacy() {
   privacyLoaded = true;
@@ -1922,11 +2358,11 @@ function mdToHtml(md) {
 <div class="ck-chat" id="ckChat" role="dialog" aria-label="Talk to CarbonKeel" hidden>
   <div class="ck-head">
     <b>Talk to us</b>
-    <span>One person, not a bot. Usually replies the same day.</span>
+    <span>Prayag Raviprakash, founder, answers every message personally, usually within one working day.</span>
   </div>
   <div class="ck-body">
     <div class="ck-msg">
-      Hello — tell me what you need and I will come back to you myself.
+      Tell us what you need, and we will come back to you by email.
       <b>What is this about?</b>
     </div>
 
@@ -1936,7 +2372,7 @@ function mdToHtml(md) {
       <button type="button" aria-pressed="false" data-c="Our CII rating">Our CII rating</button>
       <button type="button" aria-pressed="false" data-c="A question about a number">A question about a number</button>
       <button type="button" aria-pressed="false" data-c="Something looks wrong about our ship">Something looks wrong</button>
-      <button type="button" aria-pressed="false" data-c="Access to the CII calculator">Calculator access</button>
+      <button type="button" aria-pressed="false" data-c="Help with the calculator">Help with the calculator</button>
       <button type="button" aria-pressed="false" data-c="Something else">Something else</button>
     </div>
 
@@ -1954,7 +2390,7 @@ function mdToHtml(md) {
     <button class="ck-send" id="ckSend" type="button">Send</button>
     <p class="ck-note" id="ckNote">Opens your email app. Nothing is sent from this page,
       and nothing you type here is stored.</p>
-    <p class="ck-note" style="margin-top:4px"><a class="ck-priv" href="privacy.html"
+    <p class="ck-note" style="margin-top:4px"><a class="ck-priv" href="/privacy"
       target="_blank" rel="noopener" style="color:#8aa2bb">Privacy notice</a></p>
   </div>
 </div>
@@ -1990,11 +2426,11 @@ function mdToHtml(md) {
         from = document.getElementById('ckFrom').value.trim(),
         co = document.getElementById('ckCo').value.trim();
     if (!cat && !msg) {
-      note.textContent = 'Pick a topic or write a line, so I know what you need.';
+      note.textContent = 'Pick a topic or write a line, so we know what you need.';
       document.getElementById('ckMsg').focus(); return;
     }
     if (from && from.indexOf('@') < 0) {
-      note.textContent = 'That email does not look right — check it so I can reply.';
+      note.textContent = 'That email does not look right. Check it so we can reply.';
       document.getElementById('ckFrom').focus(); return;
     }
     var body = 'About: ' + (cat || 'not stated') +

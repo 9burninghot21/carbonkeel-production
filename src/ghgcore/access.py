@@ -12,6 +12,10 @@ secret.
 
 Key file: data/access_keys.txt — `KEY  # label` per line, hand-editable,
 re-read on change. A key is generated on first run if the file is absent.
+
+The gate is OFF by default: the calculator is open to every visitor. Set the
+environment variable CARBONKEEL_REQUIRE_KEY=1 to require a key again (on Fly.io:
+`flyctl secrets set CARBONKEEL_REQUIRE_KEY=1`; remove it to reopen).
 """
 import os
 import secrets
@@ -85,6 +89,10 @@ def keys() -> dict:
                 _cache, _mtime = fk, mtime
         out.update(_cache or {})
     return out
+
+
+def required() -> bool:
+    return os.environ.get("CARBONKEEL_REQUIRE_KEY", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def is_valid(key: Optional[str]) -> bool:

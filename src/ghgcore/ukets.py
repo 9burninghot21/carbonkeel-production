@@ -26,8 +26,7 @@ from typing import Optional
 
 from .schema import AnnualActivity
 from .ets_rules import (gas_emissions, UKETSExceptions, UK_FIRST_SCHEME_YEAR)
-
-DEFAULT_UKA_PRICE_GBP = 40.0   # indicative mid-2026; an input, not a market quote
+from .assumptions import DEFAULT_UKA_PRICE_GBP
 
 
 @dataclass
@@ -39,6 +38,8 @@ class UKETSResult:
     notes: list[str]
     surrender_by: str = ""
     excluded: bool = False
+    # False when no leg carries a UK share at all (the EU register cannot show UK voyages)
+    data_observable: bool = True
 
 
 def surrender_date(year: int) -> str:
@@ -63,6 +64,7 @@ def compute_ukets(activity: AnnualActivity,
                      + ", so no allowances are due.")
         return UKETSResult(0.0, 0.0, 0.0, uka_price_gbp, notes, by, True)
 
+    observable = any(leg.uk_share is not None for leg in activity.legs)
     co2e, any_uk = 0.0, False
     for leg in activity.legs:
         share = leg.uk_share or 0.0
@@ -73,6 +75,10 @@ def compute_ukets(activity: AnnualActivity,
             g = gas_emissions(fc.fuel, fc.tonnes * share, activity.vessel.engine_type,
                               activity.fuel_is_combusted)
             co2e += g.co2e(True)
+    if not observable:
+        notes.append("UK domestic voyages are not in the EU register, so the UK ETS cannot be "
+                     "estimated from public data. Enter UK voyages with your own data to include it.")
+        return UKETSResult(0.0, 0.0, 0.0, uka_price_gbp, notes, by, False, data_observable=False)
     if not any_uk:
         notes.append("No UK domestic voyages were found in this ship’s data.")
     if year == UK_FIRST_SCHEME_YEAR:

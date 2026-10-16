@@ -10,7 +10,7 @@ dead — and nothing in the suite was looking at the page.
 So this file checks the things that live outside the engines:
   1. both HTML pages parse as JavaScript (no syntax errors)
   2. the critical endpoints answer with the right status
-  3. the locked endpoint is actually locked
+  3. the calculator is open by default and locks when CARBONKEEL_REQUIRE_KEY is set
   4. nothing customer-facing leaks a raw API path or a price
 
 Run:  python tests/test_smoke.py          (starts its own server)
@@ -120,8 +120,18 @@ def serve():
 
 def check_endpoints():
     cases = [
-        ("/", 200, "app shell"),
+        ("/", 200, "landing page at the root"),
+        ("/app", 200, "app shell"),
         ("/home", 200, "app serves the landing page (one server shows the whole journey)"),
+        ("/privacy", 200, "privacy notice"),
+        ("/sitemap.xml", 200, "sitemap"),
+        ("/api/access/status", 200, "access status"),
+        ("/api/lookup/9464663?dwt=93000&eua_price=90&pool_price=120&deficit_years=2"
+         "&charter_from=2025-01-01&charter_to=2025-06-30&fueleu_basis=pool", 200, "lookup with every input"),
+        ("/api/lookup/9464663?eua_price=0", 422, "lookup rejects a zero allowance price"),
+        ("/api/lookup/9464663?charter_from=2025-01-01", 422, "lookup needs both charter dates"),
+        ("/report/ship/9464663?dwt=93000", 200, "single-ship report"),
+        ("/report/ship/9464663.csv?dwt=93000", 200, "single-ship CSV"),
         ("/healthz", 200, "healthz"),
         ("/robots.txt", 200, "robots.txt"),
         ("/privacy.html", 200, "app serves the privacy notice (relative links work)"),
@@ -138,13 +148,23 @@ def check_endpoints():
         got, _ = http(path)
         ok(label) if got == want else bad(label, f"got {got}, want {want}")
 
-    # the owner-data tool must stay locked
+    # the calculator is open by default; the gate is one environment setting away
     payload = {"ship_type": "bulk_carrier", "dwt": 50000, "year": 2026,
                "fuel_tonnes": {"hfo": 3000}, "distance_nm": 50000}
     got, _ = http("/api/cii/compute", "POST", payload)
-    ok("CII calculator locked") if got == 401 else bad("CII calculator locked", got)
-    got, _ = http("/api/cii/compute?key=ck-definitely-wrong", "POST", payload)
-    ok("CII rejects a bad key") if got == 401 else bad("CII rejects a bad key", got)
+    ok("CII calculator open by default") if got == 200 else bad("CII calculator open by default", got)
+    got, _ = http("/api/calc", "POST", dict(payload, scope={"intra_eea": 50, "extra_eea": 30}))
+    ok("your-data bill") if got == 200 else bad("your-data bill", got)
+    got, _ = http("/api/calc", "POST", dict(payload, scope={"intra_eea": 80, "extra_eea": 30}))
+    ok("voyage shares over 100% rejected") if got == 422 else bad("voyage shares over 100% rejected", got)
+    os.environ["CARBONKEEL_REQUIRE_KEY"] = "1"
+    try:
+        got, _ = http("/api/cii/compute", "POST", payload)
+        ok("gate on: needs a key") if got == 401 else bad("gate on: needs a key", got)
+        got, _ = http("/api/cii/compute?key=ck-definitely-wrong", "POST", payload)
+        ok("gate on: rejects a bad key") if got == 401 else bad("gate on: rejects a bad key", got)
+    finally:
+        os.environ.pop("CARBONKEEL_REQUIRE_KEY", None)
 
     # anonymous fleet cap
     many = ",".join(str(1111111 + i) for i in range(12))
@@ -163,7 +183,8 @@ def check_customer_copy():
             bad(f"{label}: raw API path template in customer copy")
         else:
             ok(f"{label}: no raw API paths in copy")
-        money = re.search(r"(subscription|per month|per vessel/month|our fee|\bpric(e|ed|es|ing)\b)",
+        # allowance and pool prices are the subject; our own pricing must not appear
+        money = re.search(r"(subscription|per month|per vessel/month|our fees?\b|our pric(e|es|ing)\b|\bpricing\b)",
                           text, re.I)
         bad(f"{label}: service pricing language", money.group(0)) if money \
             else ok(f"{label}: no service-pricing language")
@@ -264,7 +285,7 @@ def check_privacy_notice():
         ok(f"notice {label}") if needle.lower() in page.lower()             else bad(f"notice {label}")
     for f, label in [("site/index.html", "landing"), ("api/static/index.html", "app")]:
         html = open(os.path.join(ROOT, f), encoding="utf-8").read()
-        ok(f"{label} links the privacy notice") if "privacy.html" in html             else bad(f"{label} links the privacy notice")
+        ok(f"{label} links the privacy notice") if ("privacy.html" in html or 'href="/privacy"' in html)             else bad(f"{label} links the privacy notice")
     # documents the Method / Your-data pages render must not leak API paths
     for doc in ["CALCULATION_NOTES.md", "DATA_AND_PRIVACY.md"]:
         txt = open(os.path.join(ROOT, "docs", doc), encoding="utf-8").read()
@@ -297,7 +318,7 @@ def check_landing_page():
 
     # privacy: nothing loads from anywhere else
     ext = re.findall(r'(?:src|href)="(https?://[^"]+)"', html)
-    ext = [u for u in ext if not u.startswith("https://app.carbonkeel.com")]
+    ext = [u for u in ext if not u.startswith(("https://carbonkeel.com/", "https://app.carbonkeel.com"))]
     ok("landing makes no third-party requests") if not ext         else bad("landing makes no third-party requests", ext[:3])
     ok("landing loads no external CSS or fonts") if "url(http" not in html and "@import" not in html         else bad("landing loads no external CSS or fonts")
 

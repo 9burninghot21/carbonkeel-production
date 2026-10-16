@@ -3,17 +3,16 @@
   "ships": 16673,
   "companies": 4047,
   "ets_scope_co2_mt": 87.3,
-  "assumed_eua_eur": 70,
+  "assumed_eua_eur": 85,
   "implied_ets_cost_eur_bn": {
-    "60": 5.24,
     "70": 6.11,
-    "80": 6.99,
-    "90": 7.86
+    "85": 7.42,
+    "100": 8.73
   },
   "ships_prev_year": 14152,
   "ets_prev_year_mt": 87.5,
   "avg_ets_t_per_ship": 5238,
-  "avg_cost_per_ship_eur": 366661,
+  "avg_cost_per_ship_eur": 445231,
   "types": {
     "container ship": {
       "ships": 2368,
@@ -74,7 +73,7 @@
     "companies": 237,
     "ships": 4518,
     "ets_mt": 19.9,
-    "est_cost_eur_bn": 1.4
+    "est_cost_eur_bn": 1.69
   },
   "top10pct_companies_share_of_ets": 0.764
 }

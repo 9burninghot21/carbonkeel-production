@@ -7,14 +7,19 @@ a server-side PDF pipeline is a Phase 2 nicety, not a blocker.
 All numbers ESTIMATE: reconstruction from verified public totals. CII shown
 only when a DWT is supplied (dwts param, per-IMO), since public data lacks it.
 """
+import csv
+import html
+import io
+from datetime import datetime, timezone
+
 from ghgcore import build_scorecard
 from ghgcore.thetis import ThetisRecord, record_to_activity
 from ghgcore.fueleu import compute_fueleu
 from ghgcore.euets import compute_ets
-from ghgcore.nzf import compute_nzf
+from ghgcore.nzf import compute_nzf, NZF_STATUS
 from ghgcore.pooling import PoolCandidate, suggest_pool
+from ghgcore.assumptions import DEFAULT_EUA_PRICE_EUR
 
-EUA_PRICE = 70.0
 
 CSS = """
 body{font-family:'Segoe UI',system-ui,sans-serif;color:#0b2239;margin:0;background:#fff}
@@ -69,7 +74,7 @@ def _pooling_section(cands: list[PoolCandidate]) -> str:
 
 
 def fleet_report_html(records: dict, imos: list[str], year_hint: int = None,
-                      dwts: dict[str, float] | None = None) -> str:
+                      dwts: dict[str, float] | None = None, eua_price: float = DEFAULT_EUA_PRICE_EUR) -> str:
     dwts = dwts or {}
     rows, missing, cands = [], [], []
     tot = {"co2": 0.0, "euas": 0.0, "ets_eur": 0.0, "feu_pen": 0.0,
@@ -86,7 +91,7 @@ def fleet_report_html(records: dict, imos: list[str], year_hint: int = None,
         if supported:
             act = record_to_activity(rec, year=year, dwt=dwt or 1.0)
             feu = compute_fueleu(act)
-            ets = compute_ets(act, EUA_PRICE)
+            ets = compute_ets(act, eua_price)
             nzf = compute_nzf(act)
             if dwt:
                 cii_txt = build_scorecard(act).cii.rating
@@ -109,21 +114,21 @@ def fleet_report_html(records: dict, imos: list[str], year_hint: int = None,
     body_rows = ""
     for rec, feu, ets, nzf, cii_txt in rows:
         if ets is None:
-            body_rows += (f"<tr><td class=name>{rec.name}</td><td>{rec.imo}</td>"
-                          f"<td class=name>{rec.ship_type_raw}</td>"
+            body_rows += (f"<tr><td class=name>{html.escape(rec.name)}</td><td>{rec.imo}</td>"
+                          f"<td class=name>{html.escape(rec.ship_type_raw)}</td>"
                           f"<td colspan=6>ship type not yet supported</td></tr>")
             continue
         cb = feu.compliance_balance_tco2e
         body_rows += (
-            f"<tr><td class=name>{rec.name}</td><td>{rec.imo}</td>"
-            f"<td class=name>{rec.ship_type_raw}</td>"
+            f"<tr><td class=name>{html.escape(rec.name)}</td><td>{rec.imo}</td>"
+            f"<td class=name>{html.escape(rec.ship_type_raw)}</td>"
             f"<td>{rec.co2_tonnes:,.0f}</td><td>{cii_txt}</td>"
             f"<td>{ets.allowances_due:,.0f}</td><td>{eur(ets.cost_eur)}</td>"
             f"<td class={'neg' if cb < 0 else 'pos'}>{cb:+,.0f}</td>"
             f"<td>{eur(feu.penalty_eur)}</td></tr>")
 
     exposure = tot["ets_eur"] + tot["feu_pen"]
-    html = f"""<!DOCTYPE html><html><head><meta charset=utf-8>
+    page = f"""<!DOCTYPE html><html><head><meta charset=utf-8>
 <title>CarbonKeel Fleet Health Check</title><style>{CSS}</style></head><body>
 <div class=head><div class=logo>Carbon<span>Keel</span></div>
 <div class=sub>Fleet carbon check · built from public EU MRV data</div></div>
@@ -152,11 +157,11 @@ improve it. A negative FuelEU balance is a penalty to pay or a shortfall to pool
 balance can be pooled with another ship. CII ratings need each ship’s deadweight, which EMSA does
 not publish: send us the figures and we will add the ratings.
 IMO Net-Zero Framework scenario for 2028: <b>${tot['nzf_usd']:,.0f}</b> in remedial units on today’s
-fuel mix. The framework has not been adopted.
+fuel mix. {NZF_STATUS}
 {('Not in the public register: ' + ', '.join(missing)) if missing else ''}</p>
 <p class=note>CarbonKeel · free fleet check · all figures are ESTIMATES · EU allowances assumed at
-€{EUA_PRICE:.0f} a tonne. Contains data from EMSA THETIS-MRV, published under Article 21 of
+€{eua_price:.0f} a tonne. Contains data from EMSA THETIS-MRV, published under Article 21 of
 Regulation (EU) 2015/757. CarbonKeel’s calculations are our own and are not endorsed by EMSA or
 the European Commission.</p>
 </div></body></html>"""
-    return html
+    return page

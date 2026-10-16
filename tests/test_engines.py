@@ -678,6 +678,145 @@ def test_scorecard():
     check_eq("has actions", True, True)
 
 
+def _raises(fn) -> bool:
+    try:
+        fn()
+    except ValueError:
+        return True
+    return False
+
+
+def test_fueleu_penalty_rules():
+    print("FuelEU: applicability, Art. 23(2) multiplier, pooling cost:")
+    from ghgcore.fueleu import penalty_multiplier, penalty_per_tco2e
+    check("multiplier n=1", penalty_multiplier(1), 1.0, tol=0)
+    check("multiplier n=3 = 1 + 2/10", penalty_multiplier(3), 1.2, tol=0)
+    # 1e6 / (91.74 x 41,000) x 2,400 = 638.07 EUR per tCO2e
+    check("statutory EUR per tCO2e at HFO intensity", penalty_per_tco2e(91.74), 638.07, tol=0.0001)
+    r = compute_fueleu(base_activity(), consecutive_deficit_years=3)
+    check("third consecutive deficit: 186,310 x 1.2", r.penalty_eur, 223_572, tol=0.001)
+    # CB = (89.3368 - 91.74) x 121.5e6 g = -291.9888 t; x EUR 110 = 32,118.77
+    r = compute_fueleu(base_activity(), pool_price_eur_per_tco2e=110.0)
+    check("pooling cost at EUR 110/t", r.pooling_cost_eur, 32_118.77, tol=0.0001)
+    check("statutory penalty unchanged", r.penalty_eur, 186_310, tol=0.01)
+    r = compute_fueleu(base_activity(year=2024))
+    check_eq("2024: FuelEU not yet in force", r.applicable, False)
+    check("2024: no penalty", r.penalty_eur, 0.0, tol=0)
+    a = base_activity(year=2025)
+    a.ets_calibration = 0.0
+    r = compute_fueleu(a)
+    check_eq("verifier reported no ETS scope: outside FuelEU", r.applicable, False)
+    check("no phantom FuelEU penalty", r.penalty_eur, 0.0, tol=0)
+
+
+def test_whatif_physics():
+    print("What-if: speed exponent, auxiliary share, berth untouched:")
+    from ghgcore.whatif import apply_whatif, sea_fuel_ratio
+    check("cube law, -10%: 0.9^2", sea_fuel_ratio(-10, 3.0), 0.81, tol=0.0001)
+    check("exponent 2.6, -10%: 0.9^1.6", sea_fuel_ratio(-10, 2.6), 0.84486, tol=0.0001)
+    check("20% auxiliary: 0.8 x 0.81 + 0.2 / 0.9", sea_fuel_ratio(-10, 3.0, 20), 0.87022, tol=0.0001)
+    v = Vessel("9999999", "MV HANDCALC", ShipType.BULK_CARRIER, dwt=50_000, gt=30_000)
+    act = AnnualActivity(v, 2026, [VoyageLeg(VoyageScope.INTRA_EEA, 1000, [FuelConsumption(FuelType.HFO, 1000)]),
+                                   VoyageLeg(VoyageScope.AT_BERTH_EEA, 0, [FuelConsumption(FuelType.MDO_MGO, 100)])])
+    w = apply_whatif(act, 0, -10)
+    check("sea leg scaled", w.legs[0].fuel_consumed[0].tonnes, 810.0, tol=0.0001)
+    check("berth leg not scaled by sea speed", w.legs[1].fuel_consumed[0].tonnes, 100.0, tol=0)
+
+
+def test_g5_corrections():
+    print("G5 (MEPC.355(78)) itemised corrections:")
+    from ghgcore.g5 import (G5Deduction, G5Input, af_tanker, apply_g5, reefer_tonnes,
+                            year_factor)
+    from ghgcore.cii_calc import CIIInput, compute_cii_full
+    check("(0.75 - 0.03y), 2026", year_factor(2026), 0.66, tol=0.0001)
+    check("(0.75 - 0.03y), 2023", year_factor(2023), 0.75, tol=0.0001)
+    check("AF_Tanker,STS at 100,000 dwt = 6.1742 x 1e5^-0.246", af_tanker(100_000, False), 0.36356, tol=0.001)
+    check("reefer default: 2.75 x 24 x 175 x 1,000 days", reefer_tonnes(1000, 175), 11.55, tol=0.0001)
+    fuels = {FuelType.HFO: 10_000.0}
+    g = apply_g5(fuels, 100_000, ShipType.CONTAINER, 50_000, 2026,
+                 G5Input([G5Deduction("electrical_reefer", FuelType.HFO, 11.55)]))
+    # 3.114 x (10,000 - 0.66 x 11.55) = 31,116.26 t
+    check("reefer deduction weighted by 0.66", g.co2_numerator_t, 31_116.26, tol=0.00001)
+    res = compute_cii_full(CIIInput(ShipType.CONTAINER, dwt=50_000, year=2026, fuel_tonnes=fuels,
+                                    distance_nm=100_000,
+                                    g5=G5Input([G5Deduction("electrical_reefer", FuelType.HFO, 11.55)])))
+    check("attained with reefer correction", res.attained, 6.22325, tol=0.0001)
+    ice = G5Input([G5Deduction("voyage_ice", FuelType.HFO, 200, 1000)], ice_class="IA")
+    g = apply_g5(fuels, 100_000, ShipType.BULK_CARRIER, 50_000, 2026, ice)
+    check("ice voyage: fuel and distance both removed", g.co2_numerator_t * 1e6 / (50_000 * g.distance_nm),
+          6.16509, tol=0.0001)
+    check_eq("boiler correction refused on a bulk carrier", _raises(lambda: apply_g5(
+        fuels, 1e5, ShipType.BULK_CARRIER, 5e4, 2026, G5Input([G5Deduction("boiler", FuelType.HFO, 10)]))), True)
+    check_eq("STS and FC_electrical cannot be combined", _raises(lambda: apply_g5(
+        fuels, 1e5, ShipType.TANKER, 1e5, 2026, G5Input([G5Deduction("sts", FuelType.HFO, 100),
+                                                          G5Deduction("electrical_discharge", FuelType.HFO, 10)]))), True)
+    check_eq("ice adjustment needs an ice class", _raises(lambda: apply_g5(
+        fuels, 1e5, ShipType.BULK_CARRIER, 5e4, 2026, G5Input([G5Deduction("voyage_ice", FuelType.HFO, 10, 10)]))), True)
+    check_eq("deductions cannot exceed the fuel", _raises(lambda: apply_g5(
+        fuels, 1e5, ShipType.BULK_CARRIER, 5e4, 2026, G5Input([G5Deduction("voyage_safety", FuelType.HFO, 20_000, 10)]))), True)
+
+
+def test_speed_exponent():
+    print("Speed estimate with an adjustable exponent:")
+    from ghgcore.cii_calc import SpeedProfile
+    f3, _, _ = SpeedProfile(30, 14, 12, 200).resolve()
+    check("cube law: 30 x (12/14)^3 x 200", f3[FuelType.HFO], 3778.43, tol=0.0001)
+    f26, _, _ = SpeedProfile(30, 14, 12, 200, speed_exponent=2.6).resolve()
+    check("exponent 2.6: 30 x (12/14)^2.6 x 200", f26[FuelType.HFO], 4018.68, tol=0.0001)
+    check_eq("exponent outside 2-4.5 refused", _raises(lambda: SpeedProfile(30, 14, 12, 200, speed_exponent=6).resolve()), True)
+
+
+def test_charter_split():
+    print("Owner / time-charterer split (BIMCO clauses, pro rata):")
+    from datetime import date
+    from ghgcore.charter import split
+    s = split(2025, date(2025, 3, 1), date(2025, 8, 31), {"EU ETS allowances": 100_000})
+    check("184 days on charter", s.days_on_charter, 184, tol=0)
+    check("charterer share 184/365", s.charterer_share, 0.5041, tol=0.0001)
+    check("charterer pays 50,411", s.total_charterer_eur, 50_411, tol=0)
+    check("owner pays the rest", s.total_owner_eur, 49_589, tol=0)
+    s = split(2024, date(2023, 12, 1), date(2024, 1, 31), {"x": 366})
+    check("clipped to the year, leap year", s.days_on_charter, 31, tol=0)
+    check_eq("end before start refused", _raises(lambda: split(2025, date(2025, 5, 1), date(2025, 4, 1), {})), True)
+
+
+def test_owner_bill_split():
+    print("Owner-data bill by voyage scope:")
+    from ghgcore.ownerbill import ScopeSplit, build_activity
+    from ghgcore.ets_combined import compute_ets_combined
+    act, rows = build_activity("MV OWN", "", ShipType.BULK_CARRIER, 50_000, 0, 2026, {FuelType.HFO: 4300},
+                               ScopeSplit(intra_eea=40, extra_eea=30, berth_eea=10, uk_domestic=5))
+    c = compute_ets_combined(act, 85.0, 40.0, 1.15)
+    # EU fuel in scope = 4,300 x (0.40 + 0.5 x 0.30 + 0.10) = 2,795 t; x (3.114 + 0.0014 + 0.0477) = 8,840.86 tCO2e
+    check("EU ETS CO2e in scope", c.eu.co2e_in_scope_t, 8_840.86, tol=0.0001)
+    check("EU ETS cost at EUR 85", c.eu.cost_eur, 751_473, tol=0.0001)
+    # UK: 215 t x 3.1631 = 680.07 tCO2e x GBP 40
+    check("UK ETS cost", c.uk.cost_gbp, 27_203, tol=0.0001)
+    check_eq("rows include the remainder outside scope", rows[-1]["key"], "outside")
+    check_eq("shares over 100% refused", _raises(lambda: ScopeSplit(intra_eea=80, extra_eea=30).validate()), True)
+
+
+def test_ukets_public_data_not_observable():
+    print("UK ETS on public data: not observable, not zero-by-assumption:")
+    from ghgcore.ukets import compute_ukets
+    r = compute_ukets(base_activity(year=2027))
+    check_eq("public-style legs have no UK share", r.data_observable, False)
+
+
+def test_access_toggle():
+    print("Calculator access gate is off by default and switchable:")
+    from ghgcore import access
+    old = os.environ.pop("CARBONKEEL_REQUIRE_KEY", None)
+    try:
+        check_eq("open by default", access.required(), False)
+        os.environ["CARBONKEEL_REQUIRE_KEY"] = "1"
+        check_eq("CARBONKEEL_REQUIRE_KEY=1 closes it", access.required(), True)
+    finally:
+        os.environ.pop("CARBONKEEL_REQUIRE_KEY", None)
+        if old is not None:
+            os.environ["CARBONKEEL_REQUIRE_KEY"] = old
+
+
 if __name__ == "__main__":
     for fn in (test_cii, test_cii_z_fallback, test_cii_gas_carrier_split,
                test_cii_gt_and_lng_types,
@@ -690,7 +829,10 @@ if __name__ == "__main__":
                test_messy_ingestion, test_llm_mapper_contract,
                test_deadlines_and_agreement, test_cii_calculator,
                test_public_data_fuel_assumption,
-               test_privacy_controls, test_scorecard):
+               test_privacy_controls, test_scorecard,
+               test_fueleu_penalty_rules, test_whatif_physics, test_g5_corrections,
+               test_speed_exponent, test_charter_split, test_owner_bill_split,
+               test_ukets_public_data_not_observable, test_access_toggle):
         fn()
         print()
     print(f"All checks passed ({PASS}).")
