@@ -803,6 +803,32 @@ def test_ukets_public_data_not_observable():
     check_eq("public-style legs have no UK share", r.data_observable, False)
 
 
+def test_claim_abuse_limits():
+    print("Operator requests are bounded (unauthenticated form):")
+    from ghgcore import privacy as pv
+    check_eq("21 IMOs in one request refused", _raises(lambda: pv.log_request(
+        "suppress", [str(9100000 + i) for i in range(21)], "X", "a@b.co")), True)
+    check_eq("non-IMO strings refused", _raises(lambda: pv.log_request("claim", ["12ab567"], "X", "a@b.co")), True)
+    check_eq("oversized message refused", _raises(lambda: pv.log_request(
+        "claim", ["9464663"], "X", "a@b.co", "m" * 2001)), True)
+    old_file, old_auto = pv.SUPPRESSED_FILE, list(pv._auto_suppressed)
+    old_req = pv.REQUESTS_FILE
+    import tempfile
+    tmp = tempfile.mkdtemp()
+    pv.SUPPRESSED_FILE, pv.REQUESTS_FILE = os.path.join(tmp, "s.txt"), os.path.join(tmp, "r.jsonl")
+    pv._suppressed_mtime = -1.0
+    try:
+        pv._auto_suppressed[:] = []
+        applied = [pv.log_request("suppress", [str(9200000 + 20 * k + i) for i in range(20)], "X", "a@b.co").applied
+                   for k in range(4)]
+        check_eq("instant hiding stops at the daily budget (60)", applied, [True, True, True, False])
+        check_eq("the fourth batch is not hidden", pv.is_suppressed("9200060"), False)
+    finally:
+        pv.SUPPRESSED_FILE, pv.REQUESTS_FILE = old_file, old_req
+        pv._auto_suppressed[:] = old_auto
+        pv._suppressed_mtime = -1.0
+
+
 def test_access_toggle():
     print("Calculator access gate is off by default and switchable:")
     from ghgcore import access
@@ -832,7 +858,8 @@ if __name__ == "__main__":
                test_privacy_controls, test_scorecard,
                test_fueleu_penalty_rules, test_whatif_physics, test_g5_corrections,
                test_speed_exponent, test_charter_split, test_owner_bill_split,
-               test_ukets_public_data_not_observable, test_access_toggle):
+               test_ukets_public_data_not_observable, test_access_toggle,
+               test_claim_abuse_limits):
         fn()
         print()
     print(f"All checks passed ({PASS}).")

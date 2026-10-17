@@ -128,6 +128,12 @@ def _warm() -> None:
 threading.Thread(target=_warm, daemon=True, name="warm-register").start()
 
 
+# Nothing loads from another site; pages may not be framed; forms post only to us.
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+       "img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; "
+       "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+
+
 @app.middleware("http")
 async def _security_headers(request, call_next):
     resp = await call_next(request)
@@ -136,6 +142,8 @@ async def _security_headers(request, call_next):
     resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("Permissions-Policy",
                             "camera=(), microphone=(), geolocation=()")
+    resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    resp.headers.setdefault("Content-Security-Policy", CSP)
     return resp
 
 
@@ -167,7 +175,7 @@ def privacy_page():
 
 
 @app.get("/api/search")
-def search(request: Request, q: str = Query(min_length=3), limit: int = 20):
+def search(request: Request, q: str = Query(min_length=3, max_length=100), limit: int = 20):
     # Search fires on every keystroke (debounced), so it needs a far larger
     # budget than a lookup — but not an unlimited one, or it becomes the way
     # around the harvesting cap: ~20 names per call, 16,673 ships.
@@ -320,7 +328,7 @@ def lookup(imo: str, request: Request = None,
 
 
 @app.get("/api/fleet")
-def fleet(imos: str = Query(min_length=7), request: Request = None,
+def fleet(imos: str = Query(min_length=7, max_length=2000), request: Request = None,
           eua_price: float = Query(DEFAULT_EUA_PRICE_EUR, gt=0, le=500),
           pool_price: float = Query(DEFAULT_POOL_PRICE_EUR_PER_TCO2E, ge=0, le=2000)):
     """Comma/space/newline-separated IMOs -> per-vessel cost summary +
@@ -404,11 +412,14 @@ def eexi(imo: str, dwt: float = Query(gt=0), gt: Optional[float] = Query(None, g
 
 
 @app.get("/api/siblings/{imo}")
-def siblings(imo: str, limit: int = 60):
+def siblings(imo: str, limit: int = Query(60, ge=1, le=60), request: Request = None):
     """The selected ship's company fleet ('related ships') with the
     verified carbon-intensity-per-mile of each — chart fodder. CO2/nm is
     the honest cross-ship axis: a true CII per sibling would need each
     ship's DWT, which the public export lacks."""
+    # public EMSA facts only, shown with every ship: its own, larger allowance
+    if not privacy.rate_limit_ok(_client_key(request) + ":siblings", limit=600):
+        raise HTTPException(429, "Too many requests this hour. Please try again later.")
     recs = records()
     rec = recs.get(imo)
     if rec is None:
@@ -438,12 +449,14 @@ def eexi_custom(ship_type: ShipType, dwt: float = Query(gt=0),
                 mcr_kw: Optional[float] = Query(None, gt=0),
                 vref_kn: Optional[float] = Query(None, gt=0),
                 main_fuel: FuelType = FuelType.HFO,
-                sfoc_me: float = Query(175.0, gt=0),
-                sfoc_ae: float = Query(215.0, gt=0)):
+                sfoc_me: float = Query(175.0, gt=0, le=400),
+                sfoc_ae: float = Query(215.0, gt=0, le=400),
+                request: Request = None):
     """FREE custom-vessel EEXI: any ship, no registry needed. Either supply
     the attained EEXI, or MCR + service speed to estimate it (simplified
     EEDI formula, assumptions returned in notes)."""
     from ghgcore.eexi import compute_eexi_custom
+    _guard(request)
     try:
         r = compute_eexi_custom(ship_type, dwt, gt or dwt, attained=attained,
                                 mcr_kw=mcr_kw, vref_kn=vref_kn,
@@ -508,14 +521,26 @@ def access_check(key: str = Query(...)):
     return {"ok": True, "issued_to": access.label_for(key)}
 
 
+# Bounds on owner-supplied figures: far above any real ship, low enough that nothing overflows.
+MAX_CAPACITY = 1_000_000          # DWT or GT
+MAX_FUEL_T = 5_000_000            # tonnes of one fuel in a year
+MAX_DISTANCE_NM = 2_000_000
+
+
+def _check_fuel(*maps: dict) -> None:
+    for mp in maps:
+        if len(mp) > 10 or any(not (0 <= v <= MAX_FUEL_T) for v in mp.values()):
+            raise HTTPException(422, f"Fuel quantities must be between 0 and {MAX_FUEL_T:,} tonnes.")
+
+
 class SpeedIn(BaseModel):
-    ref_cons_t_per_day: float
-    ref_speed_kn: float
-    actual_speed_kn: float
-    sea_days: float
-    aux_t_per_day_at_sea: float = 0.0
-    port_days: float = 0.0
-    aux_t_per_day_in_port: float = 0.0
+    ref_cons_t_per_day: float = Field(ge=0, le=2000)
+    ref_speed_kn: float = Field(ge=0, le=60)
+    actual_speed_kn: float = Field(ge=0, le=60)
+    sea_days: float = Field(ge=0, le=366)
+    aux_t_per_day_at_sea: float = Field(0.0, ge=0, le=500)
+    port_days: float = Field(0.0, ge=0, le=366)
+    aux_t_per_day_in_port: float = Field(0.0, ge=0, le=500)
     main_fuel: FuelType = FuelType.HFO
     aux_fuel: FuelType = FuelType.MDO_MGO
     speed_exponent: float = Field(3.0, ge=2.0, le=4.5)
@@ -524,13 +549,13 @@ class SpeedIn(BaseModel):
 class G5DeductionIn(BaseModel):
     kind: str
     fuel: FuelType
-    tonnes: float = Field(0.0, ge=0)
-    distance_nm: float = Field(0.0, ge=0)
+    tonnes: float = Field(0.0, ge=0, le=MAX_FUEL_T)
+    distance_nm: float = Field(0.0, ge=0, le=MAX_DISTANCE_NM)
     basis: str = Field("", max_length=300)
 
 
 class G5In(BaseModel):
-    deductions: list[G5DeductionIn] = []
+    deductions: list[G5DeductionIn] = Field([], max_length=20)
     shuttle_tanker: bool = False
     ice_class: str = Field("", max_length=40)
     fi: float = Field(1.0, gt=0, le=3)
@@ -542,17 +567,17 @@ class G5In(BaseModel):
 
 class CIIIn(BaseModel):
     ship_type: ShipType
-    dwt: float = Field(0.0, ge=0)
-    gt: float = Field(0.0, ge=0)
+    dwt: float = Field(0.0, ge=0, le=MAX_CAPACITY)
+    gt: float = Field(0.0, ge=0, le=MAX_CAPACITY)
     year: int = Field(2026, ge=2023, le=2035)
     fuel_tonnes: dict[FuelType, float] = {}
-    distance_nm: float = Field(0.0, ge=0)
+    distance_nm: float = Field(0.0, ge=0, le=MAX_DISTANCE_NM)
     speed: Optional[SpeedIn] = None
     # G5 (documented operator values only): summary totals, or itemised in `g5`
-    excluded_co2_t: float = 0.0
-    excluded_distance_nm: float = 0.0
-    capacity_correction: float = 1.0
-    corrections_basis: str = ""
+    excluded_co2_t: float = Field(0.0, ge=0, le=MAX_FUEL_T * 4)
+    excluded_distance_nm: float = Field(0.0, ge=0, le=MAX_DISTANCE_NM)
+    capacity_correction: float = Field(1.0, gt=0, le=3)
+    corrections_basis: str = Field("", max_length=300)
     g5: Optional[G5In] = None
     vessel_name: str = Field("", max_length=120)
     imo_number: str = Field("", max_length=20)
@@ -562,6 +587,7 @@ def _cii_from(inp: CIIIn):
     from ghgcore.cii_calc import CIIInput, SpeedProfile, compute_cii_full
     from ghgcore.cii import CIICorrections
     from ghgcore.g5 import G5Deduction, G5Input
+    _check_fuel(inp.fuel_tonnes)
     sp = SpeedProfile(**inp.speed.model_dump()) if inp.speed is not None else None
     corr = None
     if (inp.excluded_co2_t or inp.excluded_distance_nm
@@ -591,6 +617,7 @@ def cii_compute(inp: CIIIn, key: Optional[str] = Query(None),
                 request: Request = None):
     """Owner-data CII calculation (G1–G5) with forward trajectory."""
     _require_key(key)
+    _guard(request)
     return asdict(_cii_from(inp))
 
 
@@ -783,11 +810,11 @@ def ship_report_route(imo: str, request: Request, q: ShipReportQ = Depends()):
 
 
 class ClaimIn(BaseModel):
-    kind: str                    # claim | correct | suppress
-    imos: list[str]
-    company: str = ""
-    contact_email: str
-    message: str = ""
+    kind: str = Field(pattern="^(claim|correct|suppress)$")
+    imos: list[str] = Field(max_length=20)
+    company: str = Field("", max_length=200)
+    contact_email: str = Field(max_length=254)
+    message: str = Field("", max_length=2000)
 
 
 @app.post("/api/claim")
@@ -798,6 +825,8 @@ def claim(inp: ClaimIn, request: Request = None):
     then made permanent by the operator of the service (see
     CARBONKEEL_SUPPRESSED_IMOS), because a free host can lose local files."""
     _guard(request)
+    if not privacy.rate_limit_ok(_client_key(request) + ":claim", limit=10):
+        raise HTTPException(429, "Too many requests from here this hour. Email hello@carbonkeel.com instead.")
     try:
         req = privacy.log_request(inp.kind, inp.imos, inp.company,
                                   inp.contact_email, inp.message)
@@ -814,7 +843,11 @@ def claim(inp: ClaimIn, request: Request = None):
                    "or bunker delivery notes) and we will replace the estimate and "
                    "label it as owner-verified.",
     }[inp.kind]
-    return {"ok": True, "kind": req.kind, "imos": req.imos, "message": msg}
+    if inp.kind == "suppress" and not req.applied:
+        msg = ("Received. We have had an unusual number of requests today, so we will check this "
+               "one and hide the figures by hand, usually within one working day. The EMSA-published "
+               "figures stay visible because Article 21 requires their publication.")
+    return {"ok": True, "kind": req.kind, "imos": req.imos, "applied": req.applied, "message": msg}
 
 
 @app.get("/api/calendar")
@@ -840,15 +873,22 @@ def calendar_ics(year: int = Query(2026, ge=2024, le=2035),
 
 
 @app.get("/api/pool-agreement")
-def pool_agreement(imos: str = Query(min_length=7), year: int = 2026,
-                   organiser: str = "[ORGANISER LEGAL NAME]"):
+def pool_agreement(imos: str = Query(min_length=7, max_length=2000),
+                   year: int = Query(2026, ge=2025, le=2035),
+                   organiser: str = Query("[ORGANISER LEGAL NAME]", max_length=200),
+                   request: Request = None):
     """Draft Art. 21 pooling agreement (markdown) for the given fleet."""
     from fastapi.responses import PlainTextResponse
     from ghgcore.pooling import PoolCandidate, suggest_pool
     from ghgcore.pool_agreement import draft_agreement
+    wanted = [i for i in _parse_imos(imos) if not privacy.is_suppressed(i)]
+    if len(wanted) > privacy.ANON_FLEET_MAX_VESSELS:
+        raise HTTPException(403, f"Draft agreements are limited to {privacy.ANON_FLEET_MAX_VESSELS} "
+                                 "ships. If these are your ships, claim them under “Your data”.")
+    _guard(request, cost=max(1, len(wanted)))
     recs = records()
     cands = []
-    for imo in _parse_imos(imos):
+    for imo in wanted:
         rec = recs.get(imo)
         if rec is None or rec.ship_type is None:
             continue
@@ -863,7 +903,7 @@ def pool_agreement(imos: str = Query(min_length=7), year: int = 2026,
 
 
 @app.get("/report")
-def report(imos: str = Query(min_length=7), year: Optional[int] = None,
+def report(imos: str = Query(min_length=7, max_length=2000), year: Optional[int] = Query(None, ge=2018, le=2035),
            request: Request = None,
            eua_price: float = Query(DEFAULT_EUA_PRICE_EUR, gt=0, le=500)):
     """Branded fleet health-check page (print to PDF) — the lead magnet."""
@@ -895,25 +935,27 @@ def _parse_imos(raw: str) -> list[str]:
 
 class LegIn(BaseModel):
     scope: VoyageScope
-    distance_nm: float
+    distance_nm: float = Field(ge=0, le=MAX_DISTANCE_NM)
     fuel: dict[FuelType, float]        # tonnes by fuel type
-    uk_share: Optional[float] = None
+    uk_share: Optional[float] = Field(None, ge=0, le=1)
 
 
 class ScoreIn(BaseModel):
-    imo: str
-    name: str
+    imo: str = Field(max_length=20)
+    name: str = Field(max_length=120)
     ship_type: ShipType
-    dwt: float
-    gt: float = 0.0
-    year: int
-    legs: list[LegIn]
+    dwt: float = Field(gt=0, le=MAX_CAPACITY)
+    gt: float = Field(0.0, ge=0, le=MAX_CAPACITY)
+    year: int = Field(ge=2018, le=2035)
+    legs: list[LegIn] = Field(min_length=1, max_length=500)
     eua_price: float = DEFAULT_EUA_PRICE_EUR
     nzf_year: int = 2028
 
 
 @app.post("/api/score")
-def score(inp: ScoreIn):
+def score(inp: ScoreIn, request: Request = None):
+    _guard(request)
+    _check_fuel(*(l.fuel for l in inp.legs))
     vessel = Vessel(inp.imo, inp.name, inp.ship_type, dwt=inp.dwt, gt=inp.gt)
     legs = [VoyageLeg(l.scope, l.distance_nm,
                       [FuelConsumption(f, t) for f, t in l.fuel.items() if t > 0],

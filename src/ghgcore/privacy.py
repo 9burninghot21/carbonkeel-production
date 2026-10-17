@@ -45,7 +45,15 @@ _suppressed_mtime: float = -1.0
 ANON_LOOKUPS_PER_HOUR = 120
 ANON_FLEET_MAX_VESSELS = 8
 
+# Operator requests are unauthenticated, so they are bounded: a single request cannot
+# hide the register, and instant hiding stops after a daily budget (later requests are
+# still recorded and applied by hand after a check).
+MAX_IMOS_PER_REQUEST = 20
+AUTO_SUPPRESS_PER_DAY = 60
+FIELD_LIMITS = {"company": 200, "email": 254, "message": 2000}
+
 _hits: dict[str, list[float]] = {}
+_auto_suppressed: list[float] = []
 
 
 def _ensure_dir() -> None:
@@ -111,22 +119,43 @@ class DataRequest:
     contact_email: str
     message: str
     received_utc: str
+    applied: bool = False      # a suppression that took effect straight away
 
 
 VALID_KINDS = {"claim", "correct", "suppress"}
+
+
+def _auto_budget_left(now: float) -> int:
+    _auto_suppressed[:] = [t for t in _auto_suppressed if now - t < 86400]
+    return AUTO_SUPPRESS_PER_DAY - len(_auto_suppressed)
 
 
 def log_request(kind: str, imos: list[str], company: str, email: str,
                 message: str = "") -> DataRequest:
     if kind not in VALID_KINDS:
         raise ValueError(f"kind must be one of {sorted(VALID_KINDS)}")
-    clean = [str(i).strip() for i in imos if str(i).strip()]
+    clean = list(dict.fromkeys(str(i).strip() for i in imos if str(i).strip()))
     if not clean:
         raise ValueError("at least one IMO number is required")
+    if any(not (len(i) == 7 and i.isdigit()) for i in clean):
+        raise ValueError("IMO numbers have seven digits")
+    if len(clean) > MAX_IMOS_PER_REQUEST:
+        raise ValueError(f"send at most {MAX_IMOS_PER_REQUEST} IMO numbers per request; "
+                         "for a larger fleet, email hello@carbonkeel.com")
+    for name, val in (("company", company), ("email", email), ("message", message)):
+        if len(val or "") > FIELD_LIMITS[name]:
+            raise ValueError(f"the {name} is too long (at most {FIELD_LIMITS[name]} characters)")
     if "@" not in email or "." not in email.split("@")[-1]:
         raise ValueError("a contact email is required so we can verify the request")
     req = DataRequest(kind, clean, company.strip(), email.strip(),
                       message.strip(), datetime.now(timezone.utc).isoformat())
+    new = [i for i in clean if not is_suppressed(i)] if kind == "suppress" else []
+    if kind == "suppress":
+        with _lock:
+            now = time.time()
+            if len(new) <= _auto_budget_left(now):
+                _auto_suppressed.extend([now] * len(new))
+                req.applied = True
     _ensure_dir()
     with _lock:
         with open(REQUESTS_FILE, "a", encoding="utf-8") as f:
@@ -137,12 +166,12 @@ def log_request(kind: str, imos: list[str], company: str, email: str,
     # privacy notice for how long that is kept.)
     print("CLAIM_REQUEST " + json.dumps(asdict(req), ensure_ascii=False), flush=True)
     # A suppression request takes effect immediately — we do not make an
-    # operator wait for a human to action a "stop showing your data" ask.
-    # (Claims and corrections are verified by the founder before use.)
-    if kind == "suppress":
-        for imo in clean:
-            if not is_suppressed(imo):
-                suppress(imo, f"requested by {company or email}")
+    # operator wait for a human to action a "stop showing your data" ask —
+    # within the daily budget above. (Claims and corrections are verified by
+    # the founder before use.)
+    if req.applied:
+        for imo in new:
+            suppress(imo, f"requested by {company or email}")
     return req
 
 

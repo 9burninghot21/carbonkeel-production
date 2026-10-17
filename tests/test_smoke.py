@@ -166,6 +166,23 @@ def check_endpoints():
     finally:
         os.environ.pop("CARBONKEEL_REQUIRE_KEY", None)
 
+    # abuse limits on unauthenticated routes
+    got, _ = http("/api/claim", "POST", {"kind": "suppress", "imos": [str(9100000 + i) for i in range(21)],
+                                          "contact_email": "a@b.co"})
+    ok("claim form refuses 21 IMOs") if got == 422 else bad("claim form refuses 21 IMOs", got)
+    got, _ = http("/api/score", "POST", {"imo": "1", "name": "x", "ship_type": "bulk_carrier", "dwt": 1e308,
+                                          "year": 2026, "legs": [{"scope": "intra_eea", "distance_nm": 0, "fuel": {"hfo": 1}}]})
+    ok("absurd numbers get a 422, not a 500") if got == 422 else bad("absurd numbers get a 422, not a 500", got)
+    many9 = ",".join(str(1111111 + i) for i in range(9))
+    got, _ = http(f"/api/pool-agreement?imos={many9}")
+    ok("pool agreement capped like the fleet view") if got == 403 else bad("pool agreement capped like the fleet view", got)
+    req = urllib.request.Request(BASE + "/app")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        csp, hsts = r.headers.get("Content-Security-Policy", ""), r.headers.get("Strict-Transport-Security", "")
+    ok("content security policy set") if "frame-ancestors 'none'" in csp and "default-src 'self'" in csp \
+        else bad("content security policy set", csp)
+    ok("HSTS set") if "max-age=" in hsts else bad("HSTS set", hsts)
+
     # anonymous fleet cap
     many = ",".join(str(1111111 + i) for i in range(12))
     got, _ = http(f"/api/fleet?imos={many}")
