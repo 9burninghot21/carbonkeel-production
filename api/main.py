@@ -67,6 +67,18 @@ def _client_key(request: Optional[Request]) -> str:
     return request.client.host
 
 
+def _track(request: Optional[Request], kind: str, **kw) -> None:
+    """Visit statistics (ghgcore/analytics.py). Never raises; skips the owner's own browser."""
+    if request is None or request.headers.get("x-ck-internal") == "1" or request.query_params.get("ns") == "1":
+        return
+    from ghgcore import analytics
+    try:
+        analytics.record(kind, _client_key(request), request.headers.get("user-agent", ""),
+                         path=request.url.path, **kw)
+    except Exception:                                     # noqa: BLE001
+        pass
+
+
 def _guard(request: Optional[Request], cost: int = 1) -> None:
     """Anonymous rate limit. Harvesting the register is the behaviour that
     would harm the operators we sell to — a single honest lookup is not."""
@@ -136,7 +148,14 @@ CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 
 
 @app.middleware("http")
 async def _security_headers(request, call_next):
-    resp = await call_next(request)
+    host = request.headers.get("host", "").split(":")[0].lower()
+    if host.startswith("www."):
+        # one address for visitors and search engines: www.carbonkeel.com -> carbonkeel.com
+        from fastapi.responses import RedirectResponse
+        q = request.url.query
+        resp = RedirectResponse(f"https://{host[4:]}{request.url.path}" + (f"?{q}" if q else ""), status_code=301)
+    else:
+        resp = await call_next(request)
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("X-Frame-Options", "DENY")
@@ -320,6 +339,10 @@ def lookup(imo: str, request: Request = None,
         return _suppressed_payload(rec)
     if rec.ship_type is None:
         raise HTTPException(422, _unsupported(rec.ship_type_raw))
+    t = request.query_params.get("t") if request else None
+    if t in ("1", "2"):
+        _track(request, "lookup" if t == "1" else "lookup_dwt", imo=rec.imo, ship=rec.name,
+               company=rec.company or "", detail=rec.ship_type_raw)
     return ship_result(rec, dwt=dwt, year=year, biofuel_pct=biofuel_pct, speed_pct=speed_pct,
                        speed_exp=speed_exp, aux_pct=aux_pct, ice_class=ice_class,
                        derogation_pct=derogation_pct, eua=eua_price, uka=uka_price, fx=eur_per_gbp,
@@ -377,6 +400,8 @@ def fleet(imos: str = Query(min_length=7, max_length=2000), request: Request = N
                     "supported": True})
         cands.append(PoolCandidate(imo, rec.name, feu.compliance_balance_tco2e,
                                    feu.ghg_intensity))
+        _track(request, "fleet", imo=imo, ship=rec.name, company=rec.company or "",
+               detail=f"fleet of {len(wanted)}")
     pool = suggest_pool(cands) if cands else None
     return {"source": _EXPORT_NAME, "vessels": out,
             "assumptions": assumptions_block(eua_price, DEFAULT_UKA_PRICE_GBP, DEFAULT_EUR_PER_GBP,
@@ -651,6 +676,7 @@ def calc(inp: CalcIn, key: Optional[str] = Query(None), request: Request = None)
     and NZF bill from the operator's own fuel, split by voyage scope. Nothing is stored."""
     _require_key(key)
     _guard(request)
+    _track(request, "calculator", detail=inp.ship_type.value)
     from ghgcore.ownerbill import ScopeSplit, build_activity
     from ghgcore.ets_combined import compute_ets_combined
     from ghgcore.ets_rules import ETSExceptions
@@ -735,6 +761,78 @@ def privacy_notice():
         headers={"Cache-Control": "no-cache"})
 
 
+@app.post("/api/e", status_code=204)
+async def beacon(request: Request):
+    """Page views and a few clicks, sent by navigator.sendBeacon from the pages themselves."""
+    import json as _json
+    from fastapi.responses import Response
+    from ghgcore import analytics
+    if not privacy.rate_limit_ok(_client_key(request) + ":beacon", limit=600):
+        return Response(status_code=204)
+    body = (await request.body())[:2000]
+    try:
+        d = _json.loads(body or b"{}")
+    except ValueError:
+        return Response(status_code=204)
+    if not isinstance(d, dict) or d.get("k") not in analytics.CLIENT_KINDS:
+        return Response(status_code=204)
+    if request.headers.get("x-ck-internal") != "1":
+        try:
+            analytics.record(d["k"], _client_key(request), request.headers.get("user-agent", ""),
+                             path=str(d.get("p", ""))[:80], referrer=str(d.get("r", ""))[:300],
+                             query=str(d.get("q", ""))[:300], detail=str(d.get("d", ""))[:120])
+        except Exception:                                 # noqa: BLE001
+            pass
+    return Response(status_code=204)
+
+
+def _admin(request: Request) -> None:
+    """HTTP Basic auth against CARBONKEEL_ADMIN_PASSWORD; the page does not exist without it."""
+    import base64
+    import secrets as _secrets
+    pw = os.environ.get("CARBONKEEL_ADMIN_PASSWORD", "")
+    if not pw:
+        raise HTTPException(404, "Not Found")
+    if not privacy.rate_limit_ok(_client_key(request) + ":admin", limit=60):
+        raise HTTPException(429, "Too many attempts. Try again later.")
+    got = ""
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("basic "):
+        try:
+            got = base64.b64decode(auth[6:]).decode("utf-8", "replace").split(":", 1)[-1]
+        except ValueError:
+            got = ""
+    if not _secrets.compare_digest(got.encode(), pw.encode()):
+        raise HTTPException(401, "Sign in to see the statistics.", headers={"WWW-Authenticate": 'Basic realm="CarbonKeel"'})
+
+
+@app.get("/admin/analytics")
+def admin_analytics(request: Request, days: int = Query(30, ge=1, le=730)):
+    from fastapi.responses import HTMLResponse
+    from ghgcore import analytics
+    from .admin import dashboard_html
+    _admin(request)
+    return HTMLResponse(dashboard_html(analytics.summary(days)), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/admin/analytics/leads.csv")
+def admin_leads(request: Request, days: int = Query(90, ge=1, le=730)):
+    import csv
+    import io
+    from datetime import datetime, timezone
+    from fastapi.responses import Response
+    from ghgcore import analytics
+    _admin(request)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["company", "actions", "ships looked up", "visitor countries", "last seen (UTC)", "ships"])
+    for company, n, ships, countries, last, names in analytics.summary(days)["leads"]:
+        w.writerow([company, n, ships, countries or "",
+                    datetime.fromtimestamp(last, timezone.utc).strftime("%Y-%m-%d %H:%M"), names or ""])
+    return Response(buf.getvalue(), media_type="text/csv; charset=utf-8", headers={
+        "Content-Disposition": f'attachment; filename="carbonkeel-leads-{days}d.csv"', "Cache-Control": "no-store"})
+
+
 @app.get("/robots.txt")
 def robots():
     """The landing page and privacy notice are indexable. Per-vessel derived figures are
@@ -746,6 +844,7 @@ def robots():
         "Disallow: /api/\n"
         "Disallow: /report\n"
         "Disallow: /app\n"
+        "Disallow: /admin\n"
         "Sitemap: https://carbonkeel.com/sitemap.xml\n")
 
 
@@ -796,6 +895,7 @@ def ship_report_csv_route(imo: str, request: Request, q: ShipReportQ = Depends()
     from fastapi.responses import Response
     from .ship_report import ship_report_csv
     r = _report_result(imo, q, request)
+    _track(request, "report_csv", imo=imo, ship=records()[imo].name, company=records()[imo].company or "")
     return Response(ship_report_csv(r), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="carbonkeel-{imo}.csv"'})
 
@@ -805,6 +905,7 @@ def ship_report_route(imo: str, request: Request, q: ShipReportQ = Depends()):
     from fastapi.responses import HTMLResponse
     from .ship_report import ship_report_html
     r = _report_result(imo, q, request)
+    _track(request, "report", imo=imo, ship=records()[imo].name, company=records()[imo].company or "")
     qs = request.url.query
     return HTMLResponse(ship_report_html(r, f"/report/ship/{imo}.csv" + (f"?{qs}" if qs else "")))
 
@@ -832,6 +933,7 @@ def claim(inp: ClaimIn, request: Request = None):
                                   inp.contact_email, inp.message)
     except ValueError as e:
         raise HTTPException(422, str(e))
+    _track(request, "operator_request", company=inp.company[:120], detail=f"{inp.kind}, {len(req.imos)} IMO(s)")
     msg = {
         "suppress": "Done — our derived estimates for those IMOs are hidden "
                     "from third parties straight away, and we will confirm by "

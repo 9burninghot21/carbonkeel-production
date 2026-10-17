@@ -36,3 +36,4 @@ Claude outputs/
 
 # generated shareable walkthrough (large; regenerate with scripts/walkthrough/)
 docs/walkthrough/
+data/analytics.sqlite

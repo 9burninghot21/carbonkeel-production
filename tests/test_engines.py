@@ -831,6 +831,41 @@ def test_claim_abuse_limits():
         pv._suppressed_mtime = -1.0
 
 
+def test_geo_and_analytics():
+    print("Country lookup and first-party visit statistics:")
+    import tempfile
+    from ghgcore import analytics, geo
+    check_eq("UK address", geo.country("81.2.69.142"), "GB")
+    check_eq("Greek address", geo.country("62.1.1.1"), "GR")
+    check_eq("private address has no country", geo.country("10.0.0.1"), "")
+    check_eq("garbage has no country", geo.country("not-an-ip"), "")
+    old = os.environ.get("CARBONKEEL_DATA_DIR")
+    os.environ["CARBONKEEL_DATA_DIR"] = tempfile.mkdtemp()
+    analytics._ready = False
+    try:
+        ua = "Mozilla/5.0 (Windows NT 10.0) Chrome/130"
+        check_eq("bot not recorded", analytics.record("view", "81.2.69.142", "Googlebot/2.1"), False)
+        analytics.record("view", "81.2.69.142", ua, path="/", referrer="https://www.linkedin.com/x",
+                         query="?utm_source=linkedin&utm_campaign=oct")
+        analytics.record("view", "81.2.69.142", ua, path="/app", referrer="https://carbonkeel.com/")
+        analytics.record("lookup", "62.1.1.1", ua, imo="9464663", ship="PETER OLDENDORFF", company="Oldendorff")
+        s2 = analytics.summary(7)
+        check_eq("two page views", s2["totals"].get("view"), 2)
+        check_eq("two visitors (one per address and browser)", s2["visitors"], 2)
+        check_eq("own site is not a referrer", s2["referrers"], [("linkedin.com", 1)])
+        check_eq("campaign tag kept", s2["campaigns"][0][:3], ("linkedin", "", "oct"))
+        check_eq("lead: company with its country", (s2["leads"][0][0], s2["leads"][0][3]), ("Oldendorff", "GR"))
+        import sqlite3
+        cols = [r[1] for r in sqlite3.connect(analytics.db_path()).execute("PRAGMA table_info(events)")]
+        check_eq("no column holds an IP address", any(c in ("ip", "ip_address", "addr", "client") for c in cols), False)
+    finally:
+        if old is None:
+            os.environ.pop("CARBONKEEL_DATA_DIR", None)
+        else:
+            os.environ["CARBONKEEL_DATA_DIR"] = old
+        analytics._ready = False
+
+
 def test_access_toggle():
     print("Calculator access gate is off by default and switchable:")
     from ghgcore import access
@@ -861,7 +896,7 @@ if __name__ == "__main__":
                test_fueleu_penalty_rules, test_whatif_physics, test_g5_corrections,
                test_speed_exponent, test_charter_split, test_owner_bill_split,
                test_ukets_public_data_not_observable, test_access_toggle,
-               test_claim_abuse_limits):
+               test_claim_abuse_limits, test_geo_and_analytics):
         fn()
         print()
     print(f"All checks passed ({PASS}).")

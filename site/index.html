@@ -472,6 +472,26 @@
 </style>
 </head>
 <body id="top">
+<script>
+/* Visit statistics: first-party, no cookies (see /privacy). ck_nostats in local storage switches it off for this browser. */
+(function () {
+  var off = false;
+  try { off = localStorage.getItem('ck_nostats') === '1'; } catch (e) { /* storage blocked */ }
+  window.ckNoStats = off;
+  window.ckEvent = function (k, d) {
+    if (off || !navigator.sendBeacon) return;
+    try { navigator.sendBeacon('/api/e', JSON.stringify({k: k, p: location.pathname, r: document.referrer, q: location.search, d: d || ''})); } catch (e) { /* ignore */ }
+  };
+  window.ckEvent('view');
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target : null;
+    if (!t) return;
+    if (t.closest('a[href^="mailto:"]')) window.ckEvent('email_click');
+    var c = t.closest('[data-ck]');
+    if (c) window.ckEvent(c.getAttribute('data-ck'));
+  }, true);
+})();
+</script>
 
 <!-- ship artwork, drawn once and reused everywhere -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -644,8 +664,8 @@
       <p><b>Want the analysis for this year?</b> That is the part we do with you: your noon reports and bunker delivery notes,
          this year&rsquo;s rules, your pool and charter terms, turned into the position you will actually settle.</p>
       <div class="ways">
-        <a class="go" href="#talk">Ask for this year&rsquo;s analysis</a>
-        <a class="go quiet" href="/app#cii">Try it with your own figures</a>
+        <a class="go" href="#talk" data-ck="cta_latest">Ask for this year&rsquo;s analysis</a>
+        <a class="go quiet" href="/app#cii" data-ck="cta_latest">Try it with your own figures</a>
       </div>
     </div>
   </div>
@@ -951,7 +971,7 @@
       <div class="tile w" data-reveal="r" style="--d:120">
         <div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
         <h3>Your data stays yours</h3>
-        <p>Nothing to upload to start. No cookies or tracking. Operators can switch our figures off for their ships.</p>
+        <p>Nothing to upload to start. No cookies and no advertising trackers. Operators can switch our figures off for their ships.</p>
         <span class="proof">Ship results are not search-indexed</span>
       </div>
     </div>
@@ -1835,6 +1855,7 @@
 
   function open(yes) {
     box.hidden = !yes;
+    if (yes && window.ckEvent) window.ckEvent('contact_open');
     fab.setAttribute('aria-expanded', yes ? 'true' : 'false');
     if (yes) { var f = document.getElementById('ckCat'); if (f) f.focus(); }
     else fab.focus();
@@ -1866,6 +1887,7 @@
       encodeURIComponent('CarbonKeel — ' + (cat || 'enquiry')) +
       '&body=' + encodeURIComponent(body);
     window.__ckMailto = url;               // exposed so the hand-off can be tested
+    if (window.ckEvent) window.ckEvent('contact_send', cat);
     note.textContent = 'Your email app should be opening. If it does not, write to enquiry@carbonkeel.com.';
     if (!window.__ckDry) window.location.href = url;
   });

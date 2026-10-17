@@ -316,6 +316,26 @@
 </style>
 </head>
 <body>
+<script>
+/* Visit statistics: first-party, no cookies (see /privacy). ck_nostats in local storage switches it off for this browser. */
+(function () {
+  var off = false;
+  try { off = localStorage.getItem('ck_nostats') === '1'; } catch (e) { /* storage blocked */ }
+  window.ckNoStats = off;
+  window.ckEvent = function (k, d) {
+    if (off || !navigator.sendBeacon) return;
+    try { navigator.sendBeacon('/api/e', JSON.stringify({k: k, p: location.pathname, r: document.referrer, q: location.search, d: d || ''})); } catch (e) { /* ignore */ }
+  };
+  window.ckEvent('view');
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target : null;
+    if (!t) return;
+    if (t.closest('a[href^="mailto:"]')) window.ckEvent('email_click');
+    var c = t.closest('[data-ck]');
+    if (c) window.ckEvent(c.getAttribute('data-ck'));
+  }, true);
+})();
+</script>
 <div class="wrap">
   <div class="topbar">
     <a class="logo" href="/" title="CarbonKeel home" style="text-decoration:none"><span style="color:inherit">Carbon<span>Keel</span></span></a>
@@ -711,6 +731,11 @@
 const API = (location.protocol === 'http:' || location.protocol === 'https:')
   ? '' : 'http://127.0.0.1:8000';
 const E = id => document.getElementById(id);
+/* the owner's own browser: tell the server not to count these requests */
+if (window.ckNoStats) {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = (u, o = {}) => _fetch(u, Object.assign({}, o, {headers: Object.assign({}, o.headers || {}, {'X-CK-Internal': '1'})}));
+}
 const eur = n => '€' + Math.round(n).toLocaleString('en-GB');
 const num = (n, d = 0) => Number(n).toLocaleString('en-GB', {maximumFractionDigits: d, minimumFractionDigits: d});
 /* every string that came from the register or the visitor goes through h() before innerHTML */
@@ -824,7 +849,7 @@ async function pick(imo) {
   asm.cfrom = ''; asm.cto = ''; asm.cpct = '';
   E('spin').style.display = 'block';
   try {
-    const r = await fetch(lookupUrl());
+    const r = await fetch(lookupUrl('&t=1'));
     if (!r.ok) { const t = (await r.json()).detail;
       E('err').innerHTML = h(t) + (String(t).includes('not yet supported')
         ? ' <a style="cursor:pointer" onclick="showTab(\'eexi\')">Try the custom EEXI check &rarr;</a>' : '');
@@ -845,7 +870,7 @@ async function addDwt() {
   const prev = currentDwt;
   currentDwt = dwt;
   try {
-    const d = await fetchShip();
+    const d = await fetchShip('&t=2');
     lastData = d; lastMode = 'full'; valueTeaser = null; valueCo2 = null; revealNext = true;
     baseCost = d.bill.total_eur; E('err').textContent = '';
     renderVessel();
@@ -1248,7 +1273,7 @@ function lagNote(d) {
     EMSA publishes verified emissions once a year, months after the year ends, so these figures describe ${y} voyages
     and assume heavy fuel oil. This year&rsquo;s position also depends on this year&rsquo;s rules, fuel and routes.
     <a class="inl" style="cursor:pointer" onclick="showTab('cii')">Work it out from your own figures</a> or
-    <a class="inl" href="mailto:enquiry@carbonkeel.com?subject=${encodeURIComponent('Current-year carbon position — ' + shipName(d))}">ask us for this year&rsquo;s analysis</a>.</div>`;
+    <a class="inl" data-ck="cta_latest" href="mailto:enquiry@carbonkeel.com?subject=${encodeURIComponent('Current-year carbon position — ' + shipName(d))}">ask us for this year&rsquo;s analysis</a>.</div>`;
 }
 
 /* where the emissions fall, and the share each counts for: why the bill is not total CO2 x price */
@@ -1342,7 +1367,7 @@ function applyAsm() { asm = readAsm('a', asm); saveAsm(); asmOpen = true; refetc
 function resetAsm() { asm = Object.assign({}, ASM_DEFAULT); saveAsm(); asmOpen = true; refetch(); }
 
 function reportQs() {
-  return `x=1${currentDwt ? '&dwt=' + currentDwt : ''}${exQs()}${asmQs()}`;
+  return `x=1${currentDwt ? '&dwt=' + currentDwt : ''}${exQs()}${asmQs()}${window.ckNoStats ? '&ns=1' : ''}`;
 }
 function reportButtons(imo) {
   return `<div class="row" style="margin-top:14px;flex:none">
@@ -1672,7 +1697,7 @@ function fleetImos() {
 }
 function fleetReport() {
   const imos = fleetImos();
-  if (imos.length) window.open(`${API}/report?imos=${imos.join(',')}&eua_price=${asm.eua}`, '_blank');
+  if (imos.length) window.open(`${API}/report?imos=${imos.join(',')}&eua_price=${asm.eua}${window.ckNoStats ? '&ns=1' : ''}`, '_blank');
 }
 function poolAgreement() {
   const imos = fleetImos();
@@ -2420,6 +2445,7 @@ function mdToHtml(md) {
 
   function open(yes) {
     box.hidden = !yes;
+    if (yes && window.ckEvent) window.ckEvent('contact_open');
     fab.setAttribute('aria-expanded', yes ? 'true' : 'false');
     if (yes) { var f = document.getElementById('ckCat'); if (f) f.focus(); }
     else fab.focus();
@@ -2451,6 +2477,7 @@ function mdToHtml(md) {
       encodeURIComponent('CarbonKeel — ' + (cat || 'enquiry')) +
       '&body=' + encodeURIComponent(body);
     window.__ckMailto = url;               // exposed so the hand-off can be tested
+    if (window.ckEvent) window.ckEvent('contact_send', cat);
     note.textContent = 'Your email app should be opening. If it does not, write to enquiry@carbonkeel.com.';
     if (!window.__ckDry) window.location.href = url;
   });

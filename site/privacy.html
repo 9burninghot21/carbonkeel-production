@@ -44,6 +44,26 @@
 </style>
 </head>
 <body>
+<script>
+/* Visit statistics: first-party, no cookies (see /privacy). ck_nostats in local storage switches it off for this browser. */
+(function () {
+  var off = false;
+  try { off = localStorage.getItem('ck_nostats') === '1'; } catch (e) { /* storage blocked */ }
+  window.ckNoStats = off;
+  window.ckEvent = function (k, d) {
+    if (off || !navigator.sendBeacon) return;
+    try { navigator.sendBeacon('/api/e', JSON.stringify({k: k, p: location.pathname, r: document.referrer, q: location.search, d: d || ''})); } catch (e) { /* ignore */ }
+  };
+  window.ckEvent('view');
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target : null;
+    if (!t) return;
+    if (t.closest('a[href^="mailto:"]')) window.ckEvent('email_click');
+    var c = t.closest('[data-ck]');
+    if (c) window.ckEvent(c.getAttribute('data-ck'));
+  }, true);
+})();
+</script>
 <div class="wrap">
   <header>
     <a class="logo" href="/">Carbon<span>Keel</span></a>
@@ -58,7 +78,7 @@
     <ul>
       <li>We collect almost nothing: only what you choose to type into a form or send us by email.</li>
       <li>Figures you type into the calculator are used to work out your answer and are not stored.</li>
-      <li>No cookies. No analytics. No advertising trackers.</li>
+      <li>No cookies and no advertising trackers. We count visits ourselves, without storing your IP address.</li>
       <li>We never sell your data, and we do not use it to profile you.</li>
       <li>You can ask to see it, correct it or delete it, any time, by email.</li>
     </ul>
@@ -82,6 +102,14 @@
       <tr><td>You search for a ship</td>
           <td>The name or IMO number you search for. We do not link searches to who you are.</td>
           <td>Our hosting provider records standard technical data (your IP address, the time and the page) in its server logs. We also hold your IP address in memory, briefly, to apply fair-use limits.</td></tr>
+      <tr><td>You visit a page or use a tool</td>
+          <td>The page, the time, your country, the website you came from (its name only), any campaign tag in the
+              link, whether you use a phone or a computer, and for ship lookups the ship and company you looked up
+              (public register facts).</td>
+          <td>Stored on our server to count visits and understand interest. Your country is worked out from your IP
+              address, which is then discarded and <b>never stored</b>. A code that changes every day lets us count
+              unique visitors; it cannot be linked to you after that day. Kept for up to 24 months. Country data:
+              IP geolocation by <a href="https://db-ip.com">DB-IP</a> (CC BY 4.0).</td></tr>
       <tr><td>You use the calculator with your own figures</td>
           <td>Fuel quantities, distance, speeds, voyage shares, prices, charter dates and any ship name or IMO number you type.</td>
           <td>Sent to our server over an encrypted connection, used to work out the answer, and discarded when the answer is returned. <b>We do not store them</b> or write them to our logs. A CSV or PDF you download is made on your own device.</td></tr>
@@ -93,13 +121,14 @@
           <td>Remembered in your browser&rsquo;s local storage on your own device so you do not retype it. It is sent to us only to check it when you use the calculator.</td></tr>
     </tbody>
   </table>
-  <p>We <b>do not use cookies</b>, analytics or advertising trackers on this site.
+  <p>We <b>do not use cookies</b> or advertising trackers, and no third party sees your visit.
      The "Talk to us" box is not a chatbot: it is a form that hands your message
      to your email app.</p>
 
   <h2>3. Why we use it, and our legal basis</h2>
   <ul class="plain">
     <li><b>To reply to you and act on your requests</b> — you asked us to, so we need your details to do it.</li>
+    <li><b>To understand how the site is used</b> (visit counts, countries, which ships interest visitors) — our legitimate interest in improving the service and knowing where it is useful, kept minimal and without identifying you.</li>
     <li><b>To keep the service fair and secure</b> (fair-use limits, preventing bulk copying of data) — our legitimate interest in running a reliable service, which we weigh against your privacy by keeping this minimal and short-lived.</li>
   </ul>
   <p>We do not use your details for marketing to you unless you have contacted us
@@ -138,6 +167,7 @@
     <li><b>Claim, correct and hide requests:</b> for as long as the request is in force (for a hide request, as long as you want it hidden), then up to 24 months.</li>
     <li><b>Server logs:</b> kept by our host for the short period it sets, typically days.</li>
     <li><b>Fair-use counters:</b> held in memory only and cleared within the hour.</li>
+    <li><b>Visit statistics:</b> up to 24 months, then deleted.</li>
   </ul>
 
   <h2>7. Your rights</h2>

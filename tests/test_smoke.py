@@ -183,6 +183,18 @@ def check_endpoints():
         else bad("content security policy set", csp)
     ok("HSTS set") if "max-age=" in hsts else bad("HSTS set", hsts)
 
+    # visit statistics: beacon accepted, dashboard hidden without a password, www folds into the bare domain
+    req = urllib.request.Request(BASE + "/api/e", data=b'{"k":"view","p":"/"}', method="POST",
+                                 headers={"User-Agent": "Mozilla/5.0 smoke"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            code = r.status
+    except urllib.error.HTTPError as e:
+        code = e.code
+    ok("visit beacon accepted") if code == 204 else bad("visit beacon accepted", code)
+    got, _ = http("/admin/analytics")
+    ok("statistics page hidden without a password") if got in (401, 404) else bad("statistics page hidden", got)
+
     # anonymous fleet cap
     many = ",".join(str(1111111 + i) for i in range(12))
     got, _ = http(f"/api/fleet?imos={many}")

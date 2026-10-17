@@ -54,6 +54,8 @@ file we download, and we refresh from source so it carries through.
 ## What we do not do
 
 - We do not sell or share the lookup activity of our visitors.
+- We count visits ourselves, without cookies and without storing IP addresses: the page, the
+  country, the referring website and which ships are looked up. No third party sees them.
 - We do not store the figures you type into the calculator. They are used to work out
   your answer and discarded; any report or CSV you download is yours.
 - We do not publish a downloadable copy of the register, or offer bulk export

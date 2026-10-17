@@ -9,6 +9,8 @@ primary_region = "ams"
   # Fly's edge proxy appends the visitor's address to X-Forwarded-For; without this every
   # visitor shares one rate-limit bucket (see _client_key in api/main.py).
   CARBONKEEL_PROXY_HOPS = "1"
+  # visit statistics live on the persistent volume below
+  CARBONKEEL_DATA_DIR = "/data"
 
 [[services]]
   protocol = "tcp"
@@ -34,6 +36,10 @@ primary_region = "ams"
     grace_period = "30s"
     method = "GET"
     path = "/"
+
+[mounts]
+  source = "ck_data"
+  destination = "/data"
 
 [[vm]]
   memory = "512mb"
