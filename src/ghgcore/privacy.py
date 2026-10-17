@@ -141,7 +141,7 @@ def log_request(kind: str, imos: list[str], company: str, email: str,
         raise ValueError("IMO numbers have seven digits")
     if len(clean) > MAX_IMOS_PER_REQUEST:
         raise ValueError(f"send at most {MAX_IMOS_PER_REQUEST} IMO numbers per request; "
-                         "for a larger fleet, email hello@carbonkeel.com")
+                         "for a larger fleet, email enquiry@carbonkeel.com")
     for name, val in (("company", company), ("email", email), ("message", message)):
         if len(val or "") > FIELD_LIMITS[name]:
             raise ValueError(f"the {name} is too long (at most {FIELD_LIMITS[name]} characters)")

@@ -48,7 +48,7 @@ LIST_URL = f"{BASE}/downloadable-files"
 BIN_URL = f"{BASE}/reporting-period-document/binary/{{year}}/{{version}}"
 FIXTURES = os.path.join(ROOT, "fixtures")
 MANIFEST = os.path.join(ROOT, "data", "source_manifest.json")
-UA = "CarbonKeel-data-fetch/1.0 (+mailto:hello@carbonkeel.com; public MRV data, low volume)"
+UA = "CarbonKeel-data-fetch/1.0 (+mailto:enquiry@carbonkeel.com; public MRV data, low volume)"
 PAUSE_S = 2.0
 
 

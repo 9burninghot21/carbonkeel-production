@@ -177,7 +177,7 @@ def ship_report_html(r: dict, csv_href: str) -> str:
 <span class=band>ESTIMATE: rebuilt from the verified emissions EMSA publishes. Not a verifier's statement.</span>
 <div class=wrap>{body}
 <h2>Legal references</h2><ol class=refs>{refs}</ol>
-<p class=note>CarbonKeel is operated by Prayag Raviprakash, India. It is independent and is not an
+<p class=note>CarbonKeel is independent and is not an
 accredited MRV or FuelEU verifier: allowances are surrendered, and FuelEU balances settled, on your
 verifier's figures. This report is for planning and is not legal, tax or investment advice. Contains
 data from EMSA THETIS-MRV; CarbonKeel's calculations are its own and are not endorsed by EMSA or the

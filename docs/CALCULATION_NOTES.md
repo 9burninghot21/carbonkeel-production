@@ -31,7 +31,7 @@ rating       = A/B/C/D/E via attained/required vs dd vector        [G4]
 9,342×10⁶/(50,000×50,000) = **3.737**. Reference = 4745×50,000^-0.622 =
 **5.668**. Required = 5.668×0.89 = **5.044**. Ratio 0.741 ≤ d1 0.86 → **A**.
 
-**Known estimate-path caveats** (free lookup only): distance is backed out of
+**Known estimate-path caveats** (public-data lookup only): distance is backed out of
 "CO₂ per distance" in the MRV filing; DWT/GT is user-supplied; fuel mix is
 assumed HFO-equivalent. Owner data removes all three.
 
@@ -67,7 +67,7 @@ CII  =  ────────────────────────
 175 g/kWh). Numerator = 3.114 × (10,000 − 0.66 × 11.55) = **31,116.26 t**;
 attained = 31,116.26 × 10⁶ / (50,000 × 100,000) = **6.2233** (6.228 without).
 
-## 2. EEXI (Reg. 23/25 — `eexi.py`) — FREE CHECK
+## 2. EEXI (Reg. 23/25 — `eexi.py`)
 
 ```
 required EEXI = (1 − X/100) × a × Capacity^(-c)      [EEDI reference line]
@@ -243,8 +243,8 @@ penalty. Exact DP at 1-tonne granularity below 500k t capacity; greedy
 density fallback above. Test pins the optimum against a hand-built case.
 
 ## Cross-cutting rules
-- No LLM ever produces a number (architecture rule 1; the LLM only maps
-  column names, and its output is validated then applied by code).
+- Every figure comes from these deterministic calculations; the same inputs always
+  give the same result.
 - ESTIMATE labelling on all public-data outputs. Every parameter and its source is
   listed in a full calculation worksheet, available from the Verifier view of any ship.
 - Market assumptions are inputs, not facts, and every result echoes the value it

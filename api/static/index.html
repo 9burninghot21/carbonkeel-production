@@ -321,7 +321,7 @@
     <a class="logo" href="/" title="CarbonKeel home" style="text-decoration:none"><span style="color:inherit">Carbon<span>Keel</span></span></a>
     <nav>
       <button id="nav-vessel" class="on" onclick="showTab('vessel')">Check a ship</button>
-      <button id="nav-eexi" onclick="showTab('eexi')">EEXI<span class="free">FREE</span></button>
+      <button id="nav-eexi" onclick="showTab('eexi')">EEXI</button>
       <button id="nav-cii" onclick="showTab('cii')">Your-data calculator<span class="lock" id="ciiLockTag" style="display:none">key</span></button>
       <button id="nav-fleet" onclick="showTab('fleet')">My fleet</button>
       <button id="nav-cal" onclick="showTab('cal')">Calendar</button>
@@ -361,7 +361,7 @@
 
   <!-- ============ EEXI ============ -->
   <div id="tab-eexi" class="tab">
-    <h1>Free EEXI check</h1>
+    <h1>EEXI check</h1>
     <p class="sub">Compare the required EEXI (MARPOL Annex VI, Regulation 25) with the
        technical-efficiency value the ship has already reported under EU MRV, or check your
        own ship from its particulars.</p>
@@ -445,7 +445,7 @@
       <div class="card">
         <b style="font-size:14px">Enter your access key</b>
         <p class="sub" style="margin:6px 0 12px">Access to this tool is limited at the moment. Email
-           <a href="mailto:hello@carbonkeel.com?subject=CarbonKeel%20calculator%20access">hello@carbonkeel.com</a>
+           <a href="mailto:enquiry@carbonkeel.com?subject=CarbonKeel%20calculator%20access">enquiry@carbonkeel.com</a>
            for a key. It is remembered on this device.</p>
         <div class="row">
           <input id="ciiKey" placeholder="ck-…" autocomplete="off">
@@ -644,7 +644,7 @@
   <div id="tab-method" class="tab">
     <h1>Method: check our working</h1>
     <p class="sub">Every formula and parameter, its regulatory source, and a worked example you
-       can recompute by hand. The engines are deterministic and no AI touches a number. Any
+       can recompute by hand. The calculations are deterministic: the same inputs always give the same figures. Any
        ship result can be opened as a full calculation worksheet from the Verifier view.</p>
     <div class="card method" id="methodOut">
       <span class="spin" style="display:block">Loading method notes…</span>
@@ -695,12 +695,12 @@
     publishes in THETIS-MRV, unless you supply your own data. Source: EMSA THETIS-MRV public
     report, published under Article 21 of Regulation (EU) 2015/757. Contains data from EMSA.
     CarbonKeel&rsquo;s calculations are our own and are not endorsed by EMSA or the European
-    Commission. CarbonKeel is operated by Prayag Raviprakash, India; it is independent and is not an
+    Commission. CarbonKeel is independent and is not an
     accredited verifier, so allowances and FuelEU balances are settled on your verifier&rsquo;s figures.
     Allowance and pool prices are assumptions you can change. Not legal or investment advice.
     <a style="cursor:pointer" onclick="showTab('privacy')">How we handle the data,
     and your controls</a> · <a class="ck-priv" href="/privacy"
-    target="_blank" rel="noopener">Privacy notice</a> · <a href="mailto:hello@carbonkeel.com">hello@carbonkeel.com</a>.
+    target="_blank" rel="noopener">Privacy notice</a> · <a href="mailto:enquiry@carbonkeel.com">enquiry@carbonkeel.com</a>.
     Ship results are not search-indexed. CarbonKeel v0.7.
   </footer>
 </div>
@@ -983,7 +983,7 @@ async function submitClaim() {
     E('clOut').innerHTML = `<div class="banner good" style="margin-top:12px">
       <b>${d.imos.join(', ')}</b> — ${d.message}
       <div style="margin-top:8px;font-size:13px">To be certain it reaches us,
-        <a style="color:var(--teal)" href="mailto:hello@carbonkeel.com?subject=${encodeURIComponent('CarbonKeel data request — ' + kind)}&body=${encodeURIComponent(mailBody)}">email us a copy</a>.</div></div>`;
+        <a style="color:var(--teal)" href="mailto:enquiry@carbonkeel.com?subject=${encodeURIComponent('CarbonKeel data request — ' + kind)}&body=${encodeURIComponent(mailBody)}">email us a copy</a>.</div></div>`;
     E('clMsg').value = '';
   } catch (e) { E('clErr').textContent = 'Something went wrong. Please try again.'; }
   finally { E('clGo').disabled = false; E('clGo').textContent = 'Send request'; }
@@ -1241,6 +1241,16 @@ function billBlock(d, onBasis = 'setBasis') {
 }
 function setBasis(b) { asm.basis = b; saveAsm(); refetch(); }
 
+/* public data runs a year behind: say so, and offer the current-year analysis */
+function lagNote(d) {
+  const y = d.bill.year;
+  return `<div class="banner warn" style="font-size:13.5px"><b>This is ${y}, seen from the public record.</b>
+    EMSA publishes verified emissions once a year, months after the year ends, so these figures describe ${y} voyages
+    and assume heavy fuel oil. This year&rsquo;s position also depends on this year&rsquo;s rules, fuel and routes.
+    <a class="inl" style="cursor:pointer" onclick="showTab('cii')">Work it out from your own figures</a> or
+    <a class="inl" href="mailto:enquiry@carbonkeel.com?subject=${encodeURIComponent('Current-year carbon position — ' + shipName(d))}">ask us for this year&rsquo;s analysis</a>.</div>`;
+}
+
 /* where the emissions fall, and the share each counts for: why the bill is not total CO2 x price */
 function scopeTable(d, open) {
   const s = d.scope_split;
@@ -1349,6 +1359,7 @@ function renderPartial(d, banner, keepOpen) {
       · verified ${num(d.verified.co2_tonnes)} t CO₂
       ${d.verified.tech_efficiency ? ' · ' + h(d.verified.tech_efficiency) : ''}</div>
     ${billBlock(d)}
+    ${lagNote(d)}
     ${asmBox(d)}
     ${charterBlock(d)}
     <div id="teaserSlot">${teaserHtml()}</div>
@@ -1400,6 +1411,7 @@ function renderFull(d, banner, keepOpen) {
     ${viewBar()}${banner || ''}
     <div class="idstrip"><b>${h(sc.vessel_name)}</b> · IMO ${h(sc.imo_number)} · ${sc.year} · ${num(currentDwt)} capacity</div>
     ${billBlock(d)}
+    ${lagNote(d)}
     ${asmBox(d)}
     ${charterBlock(d)}
     <div id="teaserSlot">${teaserHtml()}</div>
@@ -1520,8 +1532,8 @@ function renderEexi(d) {
   const head = custom
     ? `<div class="idstrip"><b>Custom ship</b> · ${d.ship_type} · ${Number(d.dwt).toLocaleString('en-GB')} DWT</div>`
     : `<div class="idstrip"><b>${d.name}</b> · IMO ${d.imo} · ${d.ship_type}</div>`;
-  const band = custom ? 'FREE CHECK: your inputs, our verified reference tables'
-                      : `FREE CHECK: from the ship&rsquo;s own EU MRV filing (${srcLabel(d.source)})`;
+  const band = custom ? 'EEXI CHECK: your inputs, our verified reference tables'
+                      : `EEXI CHECK: from the ship&rsquo;s own EU MRV filing (${srcLabel(d.source)})`;
   const srcLine = custom
     ? `${x.attained_basis === 'ESTIMATED' ? 'estimated from MCR and speed' : 'your supplied value'}`
     : `as filed: "${d.reported_raw ?? 'none'}"`;
@@ -2325,6 +2337,9 @@ function mdToHtml(md) {
     font-family:inherit;font-weight:600;font-size:13.5px;line-height:1}
   .ck-cats button:hover{border-color:#14b8a6}
   .ck-cats button[aria-pressed="true"]{background:rgba(45,212,191,.16);border-color:#2dd4bf;color:#2dd4bf}
+  .ck-chat select{width:100%;min-height:44px;background:rgba(0,0,0,.28);color:#f0f6fc;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;line-height:1.4}
+  .ck-chat select option{color:#0b2545;background:#fff}
+  .ck-chat select:focus{outline:2px solid #14b8a6;border-color:transparent}
   .ck-chat textarea,.ck-chat input{width:100%;min-height:44px;background:rgba(0,0,0,.28);color:#f0f6fc;
     border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:11px 13px;
     font-family:inherit;font-size:14px;line-height:1.5;margin-top:8px}
@@ -2358,23 +2373,24 @@ function mdToHtml(md) {
 <div class="ck-chat" id="ckChat" role="dialog" aria-label="Talk to CarbonKeel" hidden>
   <div class="ck-head">
     <b>Talk to us</b>
-    <span>Prayag Raviprakash, founder, answers every message personally, usually within one working day.</span>
+    <span>We reply by email, usually within one working day.</span>
   </div>
   <div class="ck-body">
     <div class="ck-msg">
       Tell us what you need, and we will come back to you by email.
-      <b>What is this about?</b>
     </div>
 
-    <p class="ck-lbl">Pick one</p>
-    <div class="ck-cats" id="ckCats" role="group" aria-label="Category">
-      <button type="button" aria-pressed="false" data-c="What my fleet owes">What my fleet owes</button>
-      <button type="button" aria-pressed="false" data-c="Our CII rating">Our CII rating</button>
-      <button type="button" aria-pressed="false" data-c="A question about a number">A question about a number</button>
-      <button type="button" aria-pressed="false" data-c="Something looks wrong about our ship">Something looks wrong</button>
-      <button type="button" aria-pressed="false" data-c="Help with the calculator">Help with the calculator</button>
-      <button type="button" aria-pressed="false" data-c="Something else">Something else</button>
-    </div>
+    <label class="ck-lbl" for="ckCat">What is this about?</label>
+    <select id="ckCat">
+      <option value="">Choose a topic</option>
+      <option value="What my fleet owes">What my fleet owes</option>
+      <option value="Our CII rating">Our CII rating</option>
+      <option value="A question about a number">A question about a number</option>
+      <option value="Something looks wrong about our ship">Something looks wrong about our ship</option>
+      <option value="Help with the calculator">Help with the calculator</option>
+      <option value="Analysis for this year, from our own data">Analysis for this year, from our own data</option>
+      <option value="Something else">Something else</option>
+    </select>
 
     <p class="ck-lbl">Your message</p>
     <textarea id="ckMsg" placeholder="Ship names or IMO numbers help, but are not required."
@@ -2405,7 +2421,7 @@ function mdToHtml(md) {
   function open(yes) {
     box.hidden = !yes;
     fab.setAttribute('aria-expanded', yes ? 'true' : 'false');
-    if (yes) { var f = document.querySelector('#ckCats button'); if (f) f.focus(); }
+    if (yes) { var f = document.getElementById('ckCat'); if (f) f.focus(); }
     else fab.focus();
   }
   fab.addEventListener('click', function () { open(box.hidden); });
@@ -2413,13 +2429,7 @@ function mdToHtml(md) {
     if (e.key === 'Escape' && !box.hidden) open(false);
   });
 
-  document.getElementById('ckCats').addEventListener('click', function (e) {
-    var b = e.target.closest('button'); if (!b) return;
-    this.querySelectorAll('button').forEach(function (x) {
-      x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
-    });
-    cat = b.dataset.c;
-  });
+  document.getElementById('ckCat').addEventListener('change', function () { cat = this.value; });
 
   document.getElementById('ckSend').addEventListener('click', function () {
     var msg = document.getElementById('ckMsg').value.trim(),
@@ -2437,11 +2447,11 @@ function mdToHtml(md) {
       (co ? '\n\nCompany: ' + co : '') +
       (from ? '\nReply to: ' + from : '') +
       '\n\n' + (msg || '(no message)') + '\n';
-    var url = 'mailto:hello@carbonkeel.com?subject=' +
+    var url = 'mailto:enquiry@carbonkeel.com?subject=' +
       encodeURIComponent('CarbonKeel — ' + (cat || 'enquiry')) +
       '&body=' + encodeURIComponent(body);
     window.__ckMailto = url;               // exposed so the hand-off can be tested
-    note.textContent = 'Your email app should be opening. If it does not, write to hello@carbonkeel.com.';
+    note.textContent = 'Your email app should be opening. If it does not, write to enquiry@carbonkeel.com.';
     if (!window.__ckDry) window.location.href = url;
   });
 })();

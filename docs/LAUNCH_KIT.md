@@ -55,7 +55,7 @@ landing page already links to `app.carbonkeel.com`.
 
 ### Email on the domain
 
-Cloudflare **Email Routing** is free: `hello@carbonkeel.com` forwards to your
+Cloudflare **Email Routing** is free: `enquiry@carbonkeel.com` forwards to your
 Gmail. To *send* as that address, add it in Gmail under "Send mail as" with a
 free SMTP relay, or pay ~$6/mo for Google Workspace once replies justify it.
 Start with forwarding — it costs nothing and looks identical to a recipient.
@@ -77,7 +77,7 @@ file is your CII calculator key.
 ## 2. The cold emails
 
 Three versions, because the two sides of the pooling market need opposite
-openings. Send from `hello@carbonkeel.com`, sign with your own name.
+openings. Send from `enquiry@carbonkeel.com`, sign with your own name.
 
 ### A · Deficit holder — the common case
 

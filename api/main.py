@@ -501,7 +501,7 @@ def _require_key(key: Optional[str]) -> str:
         return ""
     if not access.is_valid(key):
         raise HTTPException(401, "This tool needs an access key at the moment. Enter yours, "
-                                 "or email hello@carbonkeel.com for one.")
+                                 "or email enquiry@carbonkeel.com for one.")
     return access.label_for(key)
 
 
@@ -517,7 +517,7 @@ def access_check(key: str = Query(...)):
     from ghgcore import access
     if not access.is_valid(key):
         raise HTTPException(401, "That access key is not recognised. Check it, or email "
-                                 "hello@carbonkeel.com.")
+                                 "enquiry@carbonkeel.com.")
     return {"ok": True, "issued_to": access.label_for(key)}
 
 
@@ -826,7 +826,7 @@ def claim(inp: ClaimIn, request: Request = None):
     CARBONKEEL_SUPPRESSED_IMOS), because a free host can lose local files."""
     _guard(request)
     if not privacy.rate_limit_ok(_client_key(request) + ":claim", limit=10):
-        raise HTTPException(429, "Too many requests from here this hour. Email hello@carbonkeel.com instead.")
+        raise HTTPException(429, "Too many requests from here this hour. Email enquiry@carbonkeel.com instead.")
     try:
         req = privacy.log_request(inp.kind, inp.imos, inp.company,
                                   inp.contact_email, inp.message)

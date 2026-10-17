@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="index, follow">
 <title>CarbonKeel — what carbon costs your ships</title>
-<meta name="description" content="See what EU ETS, UK ETS, FuelEU Maritime and CII cost your ships, in euros, from the verified emissions EMSA publishes. Pool prices, charter splits and a downloadable report. Free, no account.">
+<meta name="description" content="See what EU ETS, UK ETS, FuelEU Maritime and CII cost your ships, in euros, from the verified emissions EMSA publishes. Pool prices, charter splits and a downloadable report. No account needed.">
 <link rel="canonical" href="https://carbonkeel.com/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://carbonkeel.com/">
@@ -92,6 +92,9 @@
     -webkit-background-clip:text;background-clip:text;color:transparent}
   .hero .sub{font-size:clamp(17px,2.3vw,21px);color:var(--ink2);margin:20px auto 0;max-width:30em;
     animation:rise .9s .2s both}
+  .hero .sub{text-wrap:balance}
+  .hero .sub.regs{margin-top:8px}
+  .hero .sub.regs b{color:var(--ink);font-weight:800}
   .seek{display:flex;gap:10px;margin:28px auto 0;max-width:560px;animation:rise .9s .35s both}
   .seek input{flex:1;min-width:0;min-height:56px;padding:0 20px;border-radius:14px;border:2px solid transparent;
     background:#fff;color:var(--ink);font-family:inherit;font-weight:500;font-size:17px;line-height:1;box-shadow:0 10px 30px rgba(11,37,69,.14)}
@@ -112,8 +115,7 @@
   .sun{position:absolute;z-index:1;right:12%;bottom:calc(var(--scene)*.70 - 34px);width:clamp(110px,15vw,190px);
     aspect-ratio:1;border-radius:50%;
     background:radial-gradient(circle at 50% 50%,#fffbe0 0 38%,var(--sun2) 60%,#ffb347 100%);
-    box-shadow:0 0 70px 34px rgba(255,200,90,.55),0 0 180px 90px rgba(255,150,120,.28);
-    transform:translate3d(0,calc(var(--sy,0)*.30px),0)}
+    box-shadow:0 0 70px 34px rgba(255,200,90,.55),0 0 180px 90px rgba(255,150,120,.28)}
   .cloud{position:absolute;z-index:2;background:#fff;border-radius:60px;opacity:.92;
     animation:drift var(--dur,120s) linear infinite;animation-delay:var(--delay,0s);
     transform:translateX(var(--rest,0))}
@@ -139,8 +141,8 @@
   .ship{position:absolute;left:0;bottom:0;width:var(--w);transform:translateX(var(--rest,30vw));
     animation:sail var(--dur,60s) linear infinite;animation-delay:var(--delay,0s)}
   @keyframes sail{from{transform:translateX(-38vw)}to{transform:translateX(112vw)}}
-  .ship .bob{animation:bob var(--bob,4.4s) ease-in-out infinite alternate;transform-origin:50% 90%}
-  @keyframes bob{from{transform:translateY(0) rotate(-.8deg)}to{transform:translateY(-4px) rotate(.9deg)}}
+  .ship .bob{animation:bob var(--bob,7s) ease-in-out infinite alternate;transform-origin:50% 90%}
+  @keyframes bob{from{transform:translateY(0) rotate(-.25deg)}to{transform:translateY(-1.5px) rotate(.3deg)}}
   .ship svg{display:block;width:100%;height:auto;overflow:visible}
   .wake{position:absolute;right:92%;bottom:2%;width:62%;height:9px;border-radius:9px;
     background:linear-gradient(90deg,transparent,rgba(255,255,255,.85));filter:blur(.6px);opacity:.9}
@@ -179,6 +181,12 @@
   .flow3 .st:nth-child(3) i{background:linear-gradient(135deg,#f59e0b,#ef4444)}
   .flow3 .st h3{font-size:20px;font-weight:800}
   .flow3 .st p{color:var(--ink2);margin-top:6px;font-size:15.5px}
+  .intro.lag{padding:10px 0 90px}
+  .lagcta{margin:34px auto 0;max-width:46em;background:#fff;border-radius:var(--r);padding:24px 26px;text-align:left;
+    box-shadow:0 14px 34px rgba(11,37,69,.08);border-left:5px solid var(--btn1)}
+  .lagcta p{color:var(--ink2);font-size:16px}
+  .lagcta p b{color:var(--ink)}
+  .lagcta .ways{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
 
   /* ================= THE VOYAGE — how we obtain it ================= */
   .how{background:linear-gradient(180deg,#e6f6ff 0%,#fff0e2 100%);padding:0}
@@ -413,6 +421,10 @@
     border:2px solid transparent;color:var(--ink);font-family:inherit;font-weight:600;font-size:15px;line-height:1}
   .pick button:hover{border-color:var(--btn1)}
   .pick button[aria-pressed="true"]{background:rgba(10,111,183,.12);border-color:var(--btn1);color:var(--btn2)}
+  .picklbl{display:block;font-size:13px;font-weight:700;color:var(--ink2);margin-top:18px}
+  .picksel{display:block;width:100%;max-width:420px;min-height:48px;margin-top:6px;padding:0 14px;border-radius:12px;
+    border:2px solid var(--line);background:#f8fbff;color:var(--ink);font-family:inherit;font-weight:600;font-size:15px}
+  .picksel:focus{outline:3px solid var(--violet);outline-offset:2px}
   .talk .seek{margin:18px 0 0;max-width:none;animation:none}
   .talk .seek input{box-shadow:inset 0 0 0 2px var(--line);background:#f8fbff}
 
@@ -546,8 +558,7 @@
     </nav>
   </div>
 </header>
-<div id="prog" aria-hidden="true"><i></i>
-  <svg viewBox="0 0 34 20"><use href="#sh-tank" width="34" height="14" y="4"/></svg></div>
+<div id="prog" aria-hidden="true"><i></i></div>
 
 <!-- ============================ HERO ============================ -->
 <section class="hero" id="hero">
@@ -560,8 +571,8 @@
 
   <div class="wrap in">
     <h1>What is carbon costing <em>your ships?</em></h1>
-    <p class="sub">Find what carbon costs each ship, see why, and see what would cut it. EU ETS, FuelEU and your
-       CII rating, in euros, from emissions already on the public record. Free.</p>
+    <p class="sub">Find what carbon costs each ship, see why, and see what would cut it.</p>
+    <p class="sub regs"><b>EU ETS, FuelEU and your CII rating</b>, from emissions already on the public record.</p>
 
     <form class="seek" action="/app" method="get">
       <input id="q" name="q" type="search" autocomplete="off" placeholder="Ship name or IMO number"
@@ -574,7 +585,8 @@
       <button type="button" onclick="demo('AIDADIVA')">a cruise ship</button>
       <button type="button" onclick="demo('9464663')">an IMO number</button>
     </p>
-    <p class="trylist" style="margin-top:2px"><a class="go quiet sm" href="#cost">See how it works</a></p>
+    <p class="trylist" style="margin-top:2px"><a class="go quiet sm" href="#cost">See how it works</a>
+      <a class="go quiet sm" href="#latest" style="margin-left:8px">Why last year&rsquo;s data is not enough</a></p>
     <p class="assure"><span>16,673 ships already loaded</span><span>No account</span><span>Nothing to upload</span></p>
   </div>
 
@@ -609,6 +621,34 @@
       <div class="st" data-reveal style="--d:0"><i>1</i><h3>Type a ship</h3><p>A name or an IMO number. That is all we ask for.</p></div>
       <div class="st" data-reveal style="--d:140"><i>2</i><h3>See the bill</h3><p>ETS, FuelEU and the CII rating, added up in euros.</p></div>
       <div class="st" data-reveal style="--d:280"><i>3</i><h3>Decide</h3><p>See which lever moves it most, and how the limit tightens.</p></div>
+    </div>
+  </div>
+</section>
+<!-- ============================ THE PUBLIC RECORD RUNS BEHIND ============================ -->
+<section class="intro lag" id="latest">
+  <div class="wrap">
+    <span class="kicker" data-reveal>Last year&rsquo;s numbers, this year&rsquo;s bill</span>
+    <h2 data-reveal style="--d:80">The public record is a rear-view mirror.</h2>
+    <p class="lede" data-reveal style="--d:160">Every figure in the instant check comes from the verified emissions EMSA publishes once a
+       year, months after the year ends. It is a lagging indicator: a fair starting point, but not what your fleet owes today.</p>
+    <div class="flow3">
+      <div class="st" data-reveal style="--d:0"><i>1</i><h3>Published a year late</h3>
+        <p>A year&rsquo;s verified emissions are made public by 30 June of the following year (Regulation (EU) 2015/757,
+           Article 21). Until then, this year&rsquo;s exposure does not appear anywhere.</p></div>
+      <div class="st" data-reveal style="--d:140"><i>2</i><h3>The rules have moved on</h3>
+        <p>2026 is the first year at 100% of EU emissions, with methane and nitrous oxide counted, and the UK ETS covers
+           shipping from 1 July 2026. Last year&rsquo;s filing understates this year&rsquo;s bill.</p></div>
+      <div class="st" data-reveal style="--d:280"><i>3</i><h3>Your fleet has changed</h3>
+        <p>Fuel mix, speed, routes, charters and the ships you bought or sold since the last filing are not in the register,
+           and public data has to assume heavy fuel oil.</p></div>
+    </div>
+    <div class="lagcta" data-reveal style="--d:200">
+      <p><b>Want the analysis for this year?</b> That is the part we do with you: your noon reports and bunker delivery notes,
+         this year&rsquo;s rules, your pool and charter terms, turned into the position you will actually settle.</p>
+      <div class="ways">
+        <a class="go" href="#talk">Ask for this year&rsquo;s analysis</a>
+        <a class="go quiet" href="/app#cii">Try it with your own figures</a>
+      </div>
     </div>
   </div>
 </section>
@@ -750,7 +790,7 @@
               <span class="tag">Step 2 · What we apply</span>
               <h3>We apply the rulebooks, line by line.</h3>
               <p>EU ETS, UK ETS, FuelEU Maritime and the IMO’s CII and EEXI, each coded from the regulation text.
-                 Plain calculations. <b>No AI touches a number.</b></p>
+                 Plain calculations you can check, with every factor cited.</p>
               <span class="chip">IMO resolutions · EU regulations</span>
             </article>
             <article class="vstep" data-pin="Verifier check">
@@ -827,7 +867,17 @@
         </svg>
       </article>
 
-      <article class="card c5" data-reveal style="--d:0">
+      <article class="card low" data-reveal style="--d:0">
+        <div class="rk"><b>4</b><span>Mostly settled</span></div>
+        <h3>EEXI</h3>
+        <p>A one-off design check most ships cleared in 2023. It matters again for newbuildings, conversions and power-limit changes.</p>
+        <svg class="gfx g-ex" viewBox="0 0 140 64" aria-hidden="true">
+          <rect class="bar" style="--i:0" x="8" y="14" width="118" height="14" rx="7" fill="#cbd5e1"/>
+          <rect class="bar" style="--i:1" x="8" y="38" width="98" height="14" rx="7" fill="#14b8a6"/>
+        </svg>
+      </article>
+
+      <article class="card c5" data-reveal style="--d:120">
         <div class="rk"><b>+</b><span>Your whole fleet</span></div>
         <h3>Fleet view</h3>
         <p>Paste a list of IMO numbers. Get one total, a ranking of your ships, and a drill-down into each.</p>
@@ -844,7 +894,7 @@
         </svg>
       </article>
 
-      <article class="card c6" data-reveal style="--d:120">
+      <article class="card c6" data-reveal style="--d:240">
         <div class="rk"><b>+</b><span>Never miss a date</span></div>
         <h3>Deadlines and worksheets</h3>
         <p>A compliance calendar for Outlook or Google, and a full worksheet your verifier can follow.</p>
@@ -864,15 +914,6 @@
         </svg>
       </article>
 
-      <article class="card low" data-reveal style="--d:240">
-        <div class="rk"><b>4</b><span>Mostly settled · free</span></div>
-        <h3>EEXI</h3>
-        <p>A one-off design check most ships cleared in 2023. It matters again for newbuildings, conversions and power-limit changes.</p>
-        <svg class="gfx g-ex" viewBox="0 0 140 64" aria-hidden="true">
-          <rect class="bar" style="--i:0" x="8" y="14" width="118" height="14" rx="7" fill="#cbd5e1"/>
-          <rect class="bar" style="--i:1" x="8" y="38" width="98" height="14" rx="7" fill="#14b8a6"/>
-        </svg>
-      </article>
     </div>
   </div>
 </section>
@@ -962,8 +1003,8 @@
         <div class="body">
           <p>Carbon factors, reference lines, reduction factors and fuel properties come from the IMO resolutions and EU
              regulations themselves, checked line by line against the published texts.</p>
-          <p>No AI touches a compliance number. The calculations are ordinary code built from the rules, and we will walk your
-             verifier through any of them.</p>
+          <p>Every figure is worked out by the rules exactly as written, and the same inputs always give the same answer.
+             We will walk your verifier through any of them.</p>
         </div>
       </details>
       <details>
@@ -975,14 +1016,14 @@
         </div>
       </details>
       <details>
-        <summary>Who is behind CarbonKeel, and what it is not</summary>
+        <summary>Who we are, and what we are not</summary>
         <div class="body">
-          <p>CarbonKeel is built and run by <b>Prayag Raviprakash</b>, based in India. It is independent: not
-             affiliated with EMSA, the European Commission, the IMO, a classification society or a fuel supplier.</p>
+          <p>CarbonKeel is an independent maritime carbon-compliance business. It is not affiliated with EMSA, the
+             European Commission, the IMO, a classification society or a fuel supplier.</p>
           <p>It is <b>not an accredited MRV or FuelEU verifier</b>. Allowances are surrendered, and FuelEU balances
              settled, on the figures your verifier accepts. Use CarbonKeel to plan, budget and check; every number shows
              its source, and the full method is published so your verifier can follow it.</p>
-          <p>Questions, corrections or a review of your fleet: <a href="mailto:hello@carbonkeel.com">hello@carbonkeel.com</a>.</p>
+          <p>Questions, corrections or a review of your fleet: <a href="mailto:enquiry@carbonkeel.com">enquiry@carbonkeel.com</a>.</p>
         </div>
       </details>
       <details>
@@ -1000,20 +1041,23 @@
 <section class="talksec" id="talk">
   <div class="wrap">
     <span class="kicker" data-reveal>Talk to us</span>
-    <h2 data-reveal style="--d:80">Ask the person who built it.</h2>
-    <p class="lede" data-reveal style="--d:160">CarbonKeel is run by its founder, Prayag Raviprakash, who answers every message
-       personally. Ask anything about a number, the method, or whether this is worth your time.</p>
+    <h2 data-reveal style="--d:80">A person, not a form.</h2>
+    <p class="lede" data-reveal style="--d:160">Ask anything about a number, the method, or this year&rsquo;s position for your
+       fleet. Every message gets a personal reply.</p>
 
     <div class="talk" data-reveal>
       <h3>Send us your fleet and we will work out what it costs</h3>
-      <p>Give us your IMO numbers and we will come back with the whole fleet costed, free. If you would rather ask a
+      <p>Give us your IMO numbers and we will come back with the whole fleet costed. If you would rather ask a
          question first, that is fine too.</p>
-      <div class="pick" role="group" aria-label="What is this about">
-        <button type="button" aria-pressed="false" onclick="setTopic(this,'what our fleet costs')">What our fleet costs</button>
-        <button type="button" aria-pressed="false" onclick="setTopic(this,'a question about the numbers')">I have a question</button>
-        <button type="button" aria-pressed="false" onclick="setTopic(this,'our CII rating')">Our CII rating</button>
-        <button type="button" aria-pressed="false" onclick="setTopic(this,'something else')">Something else</button>
-      </div>
+      <label class="picklbl" for="topic">What is this about?</label>
+      <select id="topic" class="picksel" onchange="TOPIC = this.value">
+        <option value="">Choose a topic</option>
+        <option value="what our fleet costs">What our fleet costs</option>
+        <option value="this year's position from our own data">This year&rsquo;s position, from our own data</option>
+        <option value="a question about the numbers">I have a question</option>
+        <option value="our CII rating">Our CII rating</option>
+        <option value="something else">Something else</option>
+      </select>
       <form class="seek" onsubmit="return startChat(event)">
         <input id="who" type="text" autocomplete="organization" placeholder="Your company" aria-label="Your company">
         <button class="go" type="submit">Start the conversation</button>
@@ -1021,7 +1065,7 @@
       <p id="talkNote" style="font-size:13.5px;color:var(--faint);margin-top:12px">
         Opens your email to us. Nothing is sent from this page. <a href="/privacy">Privacy notice</a></p>
       <div class="ways">
-        <a class="go quiet" href="mailto:hello@carbonkeel.com">Email hello@carbonkeel.com</a>
+        <a class="go quiet" href="mailto:enquiry@carbonkeel.com">Email enquiry@carbonkeel.com</a>
         <a class="go quiet" href="/app">Check a ship yourself</a>
       </div>
     </div>
@@ -1052,7 +1096,7 @@
   <footer class="f">
     <div class="wrap">
       <p><span class="n">CarbonKeel</span> — what carbon costs your ships.</p>
-      <p style="margin-top:10px">Operated by Prayag Raviprakash, India. Calculations follow Directive 2003/87/EC (EU ETS),
+      <p style="margin-top:10px">CarbonKeel is an independent business. Calculations follow Directive 2003/87/EC (EU ETS),
          SI 2026/392 (UK ETS), Regulation (EU) 2023/1805 (FuelEU Maritime) and MARPOL Annex VI (CII and EEXI), with
          every parameter cited in the published method. CarbonKeel is independent and is not an accredited verifier.</p>
       <p style="margin-top:10px">Figures rebuilt from the EU MRV register are estimates and are labelled as such. Contains data from EMSA
@@ -1061,7 +1105,7 @@
          from third parties. Ship results are not search-indexed. Allowance and pool prices are assumptions. Not legal or
          investment advice. The example above is an illustration, not a real
          ship’s filing.</p>
-      <p style="margin-top:14px"><a href="mailto:hello@carbonkeel.com">hello@carbonkeel.com</a> ·
+      <p style="margin-top:14px"><a href="mailto:enquiry@carbonkeel.com">enquiry@carbonkeel.com</a> ·
         <a href="/privacy">Privacy notice</a> · <a href="/">Back to home</a></p>
     </div>
   </footer>
@@ -1096,10 +1140,10 @@
     var body = 'Company: ' + who +
       '\n\nAbout: ' + (TOPIC || 'not stated') +
       '\n\nIMO numbers (optional):\n\n\nAnything else:\n';
-    var url = 'mailto:hello@carbonkeel.com?subject=' +
+    var url = 'mailto:enquiry@carbonkeel.com?subject=' +
       encodeURIComponent('CarbonKeel — ' + who) + '&body=' + encodeURIComponent(body);
     window.__ckMailto = url;               // exposed so the hand-off can be tested
-    note.textContent = 'Your email app should be opening. If not, write to hello@carbonkeel.com.';
+    note.textContent = 'Your email app should be opening. If not, write to enquiry@carbonkeel.com.';
     if (!window.__ckDry) window.location.href = url;
     return false;
   }
@@ -1319,7 +1363,7 @@
   };
 
   Sea.prototype.surface = function (L, x) {                 // height of one layer's water at x (px, up is negative)
-    var y = L.y - (this.cfg.scrollY || 0) * L.par;
+    var y = L.y;
     for (var i = 0; i < L.comps.length; i++) { var c = L.comps[i]; y -= c.a * Math.cos(c.k * x + c.w * this.t + c.ph); }
     return y;
   };
@@ -1342,10 +1386,13 @@
       var ys = [], n = 7, x0 = sh.x - len / 2;
       for (var s = 0; s < n; s++) ys.push(S.surface(L, x0 + len * (s / (n - 1))));
       var mean = ys.reduce(function (a, b) { return a + b; }, 0) / n;
-      var tPitch = Math.atan2(ys[n - 1] - ys[0], len) * 0.85;
-      var a = 1 - Math.exp(-dt / 0.35);                       // inertia: the hull follows the water, it does not snap to it
-      sh.heave += (mean - sh.heave) * a; if (!sh.init) { sh.heave = mean; sh.init = 1; }
-      sh.pitch += (tPitch - sh.pitch) * (1 - Math.exp(-dt / 0.5));
+      // A long, heavy hull answers only part of the swell, and slowly: real ships of this size
+      // heave a metre or two and pitch a degree or so in a moderate sea.
+      var tPitch = clamp(Math.atan2(ys[n - 1] - ys[0], len) * 0.3, -0.02, 0.02);
+      var calm = L.y - 0.35 * (L.y - mean);
+      var a = 1 - Math.exp(-dt / 1.1);                        // inertia: the hull follows the water, it does not snap to it
+      sh.heave += (calm - sh.heave) * a; if (!sh.init) { sh.heave = calm; sh.init = 1; }
+      sh.pitch += (tPitch - sh.pitch) * (1 - Math.exp(-dt / 1.4));
       sh.y = sh.heave - 0.5 * L.scale * 1;                    // sits at the waterline, a touch in
       var k = sh.sp.k, c = Math.cos(sh.pitch), sn = Math.sin(sh.pitch);
       var toWorld = (function (ox, oy, cc, ss) {              // fixed to this ship's pose for this frame
@@ -1423,7 +1470,7 @@
       for (x = -20; x <= W + 20; x += step) { var yy = S.surface(L, x), xx = S.shiftX(L, x); if (x === -20) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); }
       ctx.strokeStyle = cfg.night ? 'rgba(190,210,255,.20)' : 'rgba(255,255,255,.26)'; ctx.lineWidth = Math.max(.8, L.scale * 1.7); ctx.stroke();
       if (L.amp >= 2) for (x = 0; x <= W; x += 9) {
-        var h = (L.y - (S.cfg.scrollY || 0) * L.par - S.surface(L, x)) / (L.amp * 1.85);
+        var h = (L.y - S.surface(L, x)) / (L.amp * 1.85);
         if (h > .55) {
           var a = clamp((h - .55) * 2.2, 0, .9) * (cfg.night ? .55 : 1);
           ctx.fillStyle = 'rgba(255,255,255,' + a + ')';
@@ -1465,7 +1512,7 @@
   };
 
   var seas = [];
-  function frame(S, dt) { S.cfg.scrollY = Math.min(window.pageYOffset || 0, 1600); S.step(dt); S.draw(); }
+  function frame(S, dt) { S.step(dt); S.draw(); }
 
   function start(id, cfg) {
     var el = document.getElementById(id);
@@ -1715,6 +1762,9 @@
     font-family:inherit;font-weight:600;font-size:13.5px;line-height:1}
   .ck-cats button:hover{border-color:#14b8a6}
   .ck-cats button[aria-pressed="true"]{background:rgba(45,212,191,.16);border-color:#2dd4bf;color:#2dd4bf}
+  .ck-chat select{width:100%;min-height:44px;background:rgba(0,0,0,.28);color:#f0f6fc;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;line-height:1.4}
+  .ck-chat select option{color:#0b2545;background:#fff}
+  .ck-chat select:focus{outline:2px solid #14b8a6;border-color:transparent}
   .ck-chat textarea,.ck-chat input{width:100%;min-height:44px;background:rgba(0,0,0,.28);color:#f0f6fc;
     border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:11px 13px;
     font-family:inherit;font-size:14px;line-height:1.5;margin-top:8px}
@@ -1745,20 +1795,22 @@
 <div class="ck-chat" id="ckChat" role="dialog" aria-label="Talk to CarbonKeel" hidden>
   <div class="ck-head">
     <b>Talk to us</b>
-    <span>Prayag Raviprakash, founder, answers every message personally, usually within one working day.</span>
+    <span>We reply by email, usually within one working day.</span>
   </div>
   <div class="ck-body">
-    <div class="ck-msg">Hello. Tell me what you need and I will come back to you myself. <b>What is this about?</b></div>
+    <div class="ck-msg">Tell us what you need and we will come back to you by email.</div>
 
-    <p class="ck-lbl">Pick one</p>
-    <div class="ck-cats" id="ckCats" role="group" aria-label="Category">
-      <button type="button" aria-pressed="false" data-c="What my fleet owes">What my fleet owes</button>
-      <button type="button" aria-pressed="false" data-c="Our CII rating">Our CII rating</button>
-      <button type="button" aria-pressed="false" data-c="A question about a number">A question about a number</button>
-      <button type="button" aria-pressed="false" data-c="Something looks wrong about our ship">Something looks wrong</button>
-      <button type="button" aria-pressed="false" data-c="Access to the CII calculator">Calculator access</button>
-      <button type="button" aria-pressed="false" data-c="Something else">Something else</button>
-    </div>
+    <label class="ck-lbl" for="ckCat">What is this about?</label>
+    <select id="ckCat">
+      <option value="">Choose a topic</option>
+      <option value="What my fleet owes">What my fleet owes</option>
+      <option value="Our CII rating">Our CII rating</option>
+      <option value="A question about a number">A question about a number</option>
+      <option value="Something looks wrong about our ship">Something looks wrong about our ship</option>
+      <option value="Help with the calculator">Help with the calculator</option>
+      <option value="Analysis for this year, from our own data">Analysis for this year, from our own data</option>
+      <option value="Something else">Something else</option>
+    </select>
 
     <p class="ck-lbl">Your message</p>
     <textarea id="ckMsg" placeholder="Ship names or IMO numbers help, but are not required." aria-label="Your message"></textarea>
@@ -1771,7 +1823,7 @@
     <button class="ck-send" id="ckSend" type="button">Send</button>
     <p class="ck-note" id="ckNote">Opens your email app. Nothing is sent from this page,
       and nothing you type here is stored.</p>
-    <p class="ck-note" style="margin-top:4px"><a class="ck-priv" href="privacy.html"
+    <p class="ck-note" style="margin-top:4px"><a class="ck-priv" href="/privacy"
       target="_blank" rel="noopener" style="color:#9db6d1">Privacy notice</a></p>
   </div>
 </div>
@@ -1786,7 +1838,7 @@
   function open(yes) {
     box.hidden = !yes;
     fab.setAttribute('aria-expanded', yes ? 'true' : 'false');
-    if (yes) { var f = document.querySelector('#ckCats button'); if (f) f.focus(); }
+    if (yes) { var f = document.getElementById('ckCat'); if (f) f.focus(); }
     else fab.focus();
   }
   fab.addEventListener('click', function () { open(box.hidden); });
@@ -1794,35 +1846,29 @@
     if (e.key === 'Escape' && !box.hidden) open(false);
   });
 
-  document.getElementById('ckCats').addEventListener('click', function (e) {
-    var b = e.target.closest('button'); if (!b) return;
-    this.querySelectorAll('button').forEach(function (x) {
-      x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
-    });
-    cat = b.dataset.c;
-  });
+  document.getElementById('ckCat').addEventListener('change', function () { cat = this.value; });
 
   document.getElementById('ckSend').addEventListener('click', function () {
     var msg = document.getElementById('ckMsg').value.trim(),
         from = document.getElementById('ckFrom').value.trim(),
         co = document.getElementById('ckCo').value.trim();
     if (!cat && !msg) {
-      note.textContent = 'Pick a topic or write a line, so I know what you need.';
+      note.textContent = 'Pick a topic or write a line, so we know what you need.';
       document.getElementById('ckMsg').focus(); return;
     }
     if (from && from.indexOf('@') < 0) {
-      note.textContent = 'That email does not look right — check it so I can reply.';
+      note.textContent = 'That email does not look right — check it so we can reply.';
       document.getElementById('ckFrom').focus(); return;
     }
     var body = 'About: ' + (cat || 'not stated') +
       (co ? '\n\nCompany: ' + co : '') +
       (from ? '\nReply to: ' + from : '') +
       '\n\n' + (msg || '(no message)') + '\n';
-    var url = 'mailto:hello@carbonkeel.com?subject=' +
+    var url = 'mailto:enquiry@carbonkeel.com?subject=' +
       encodeURIComponent('CarbonKeel — ' + (cat || 'enquiry')) +
       '&body=' + encodeURIComponent(body);
     window.__ckMailto = url;               // exposed so the hand-off can be tested
-    note.textContent = 'Your email app should be opening. If it does not, write to hello@carbonkeel.com.';
+    note.textContent = 'Your email app should be opening. If it does not, write to enquiry@carbonkeel.com.';
     if (!window.__ckDry) window.location.href = url;
   });
 })();

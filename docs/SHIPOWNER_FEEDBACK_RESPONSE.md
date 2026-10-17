@@ -5,7 +5,7 @@ and what the product does now. Figures are from the engines; see docs/CALCULATIO
 
 | Point raised | Finding | What changed |
 |---|---|---|
-| "One person, not a bot" reads as a hobby project | Fair | Named operator (Prayag Raviprakash, India) on the landing page, app footer, report and privacy notice. New "Who is behind CarbonKeel, and what it is not" section: independent, **not an accredited verifier**. No credentials claimed that do not exist. |
+| "One person, not a bot" reads as a hobby project | Fair | CarbonKeel presented as an independent business (a sole proprietorship), with a "Who we are, and what we are not" section: independent, **not an accredited verifier**. No credentials claimed that do not exist. |
 | Privacy page broken (403) | True on the old host | `/privacy` served by the app. Notice names the controller, the real hosts (Fly.io Amsterdam, Namecheap, Gmail) and says calculator inputs are used for the answer and not stored. It does **not** claim "client-side only": the server does the maths. |
 | Access key is friction | Fair | Calculator open to everyone. `CARBONKEEL_REQUIRE_KEY=1` turns the key back on. |
 | Voyage split (50% vs 100%) ignored | **Not true for the public lookup**: the register's own scope split was already applied, and the bill uses the verifier's figure. It was not visible. | Every ship now shows the split table (between EU ports 100%, leaving or arriving 50%, berth 100%). The your-data calculator takes the operator's own split, UK domestic and GB–NI included. |
@@ -32,5 +32,5 @@ and what the product does now. Figures are from the engines; see docs/CALCULATIO
 
 - A live allowance price feed (needs a licensed data source).
 - Legal entity: the site names an individual operator until a company exists.
-- Email: hello@carbonkeel.com needs forwarding set up at Namecheap.
+- Email: enquiry@carbonkeel.com needs forwarding set up at Namecheap.
 - Verifier or class partnership: nothing is claimed until one exists.

@@ -296,7 +296,7 @@ def check_privacy_notice():
     ok("site/privacy.html exists")
     page = open(path, encoding="utf-8").read()
     for needle, label in [("controller", "names the controller"),
-                          ("hello@carbonkeel.com", "gives a contact address"),
+                          ("enquiry@carbonkeel.com", "gives a contact address"),
                           ("right to", "states rights / complaint route"),
                           ("cookies", "states the cookie position")]:
         ok(f"notice {label}") if needle.lower() in page.lower()             else bad(f"notice {label}")

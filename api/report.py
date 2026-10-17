@@ -159,7 +159,7 @@ not publish: send us the figures and we will add the ratings.
 IMO Net-Zero Framework scenario for 2028: <b>${tot['nzf_usd']:,.0f}</b> in remedial units on today’s
 fuel mix. {NZF_STATUS}
 {('Not in the public register: ' + ', '.join(missing)) if missing else ''}</p>
-<p class=note>CarbonKeel · free fleet check · all figures are ESTIMATES · EU allowances assumed at
+<p class=note>CarbonKeel · fleet check · all figures are ESTIMATES · EU allowances assumed at
 €{eua_price:.0f} a tonne. Contains data from EMSA THETIS-MRV, published under Article 21 of
 Regulation (EU) 2015/757. CarbonKeel’s calculations are our own and are not endorsed by EMSA or
 the European Commission.</p>

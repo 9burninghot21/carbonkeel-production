@@ -43,7 +43,7 @@ def build_audit(activity: AnnualActivity, eua_price: float = DEFAULT_EUA_PRICE_E
 
     return {
         "meta": {
-            "generated_by": "CarbonKeel deterministic engines v0.3 — no LLM "
+            "generated_by": "CarbonKeel calculation engines v0.3 — deterministic; "
                             "touches any figure in this worksheet",
             "estimate": estimate,
             "eua_price_assumption_eur": eua_price,
