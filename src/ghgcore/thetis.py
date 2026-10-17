@@ -232,6 +232,40 @@ def assumed_fuel(rec: ThetisRecord) -> FuelType:
     return FuelType.LNG if rec.ship_type == ShipType.LNG_CARRIER else FuelType.HFO
 
 
+MIX_TOLERANCE = 0.0015      # t CO2 per t fuel: the register's rounding
+
+
+def inferred_mix(rec: ThetisRecord) -> tuple[list[tuple[FuelType, float]], str]:
+    """Fuel mix (fuel, share of fuel mass) worked out from the register's own figures.
+
+    The register publishes total CO2 and total fuel mass, so their ratio is the fleet-average
+    carbon factor of what the ship burned: 3.114 heavy fuel oil, 3.151 light fuel oil, 3.206
+    gas oil, 2.750 LNG. A ratio between two of them is read as a blend of the two (by mass),
+    which reproduces both published totals exactly. Without a usable fuel figure, fall back to
+    `assumed_fuel`.
+    """
+    cf = CF_TCO2_PER_T
+    if not rec.fuel_tonnes or not rec.co2_tonnes:
+        f = assumed_fuel(rec)
+        return [(f, 1.0)], f"assumed {f.value.upper()}: the register gives no fuel figure"
+    r = rec.co2_tonnes / rec.fuel_tonnes
+    label = f"{r:.3f} t CO2 per t fuel in the register"
+    for f in (FuelType.HFO, FuelType.LFO, FuelType.MDO_MGO, FuelType.LNG):
+        if abs(r - cf[f]) <= MIX_TOLERANCE:
+            return [(f, 1.0)], f"{f.value.upper()}, from {label}"
+    hfo, mgo, lng = cf[FuelType.HFO], cf[FuelType.MDO_MGO], cf[FuelType.LNG]
+    if hfo < r < mgo:
+        x = (r - hfo) / (mgo - hfo)
+        return [(FuelType.HFO, 1 - x), (FuelType.MDO_MGO, x)], f"{(1 - x) * 100:.0f}% HFO, {x * 100:.0f}% MGO by mass, from {label}"
+    if lng < r < hfo:
+        x = (hfo - r) / (hfo - lng)
+        return [(FuelType.LNG, x), (FuelType.HFO, 1 - x)], f"{x * 100:.0f}% LNG, {(1 - x) * 100:.0f}% HFO by mass, from {label}"
+    if mgo < r <= mgo + 0.05:
+        return [(FuelType.MDO_MGO, 1.0)], f"MDO/MGO, from {label}"
+    f = assumed_fuel(rec)
+    return [(f, 1.0)], f"assumed {f.value.upper()}: the register's ratio ({label}) matches no oil or gas mix"
+
+
 def record_to_activity(rec: ThetisRecord, year: int, dwt: float,
                        assume_fuel: Optional[FuelType] = None) -> AnnualActivity:
     """Build an ESTIMATE activity from public MRV data.
@@ -245,9 +279,14 @@ def record_to_activity(rec: ThetisRecord, year: int, dwt: float,
     if rec.ship_type is None:
         raise ValueError(f"Unmapped ship type {rec.ship_type_raw!r} for IMO "
                          f"{rec.imo} — extend SHIPTYPE_MAP (and G2/G4 tables).")
-    fuel = assume_fuel or assumed_fuel(rec)
-    cf = CF_TCO2_PER_T[fuel]
-    tag = f"assumed {fuel.value.upper()}"
+    if assume_fuel:
+        mix, tag = [(assume_fuel, 1.0)], f"assumed {assume_fuel.value.upper()}"
+    else:
+        mix, tag = inferred_mix(rec)
+    cf = sum(share * CF_TCO2_PER_T[f] for f, share in mix)      # t CO2 per t of the mix
+
+    def fuels(co2_t: float) -> list:
+        return [FuelConsumption(f, co2_t / cf * share) for f, share in mix if share > 0]
     # `dwt` is the caller-supplied capacity: DWT for most types, GT for the
     # GT-capacity types (ro-ro/ro-pax/cruise/vehicle) — set both so either
     # basis works; the CII engine picks the right one per MEPC.353(78).
@@ -256,9 +295,7 @@ def record_to_activity(rec: ThetisRecord, year: int, dwt: float,
     total_co2 = rec.co2_tonnes or 0.0
 
     if rec.co2_intra_t is None:   # legacy CSV: no splits available
-        fuel_t = rec.fuel_tonnes or (total_co2 / cf)
-        leg = VoyageLeg(VoyageScope.INTRA_EEA, total_dist,
-                        [FuelConsumption(fuel, fuel_t)],
+        leg = VoyageLeg(VoyageScope.INTRA_EEA, total_dist, fuels(total_co2),
                         f"THETIS-MRV verified EU scope (ESTIMATE, {tag})")
         return AnnualActivity(vessel, year, [leg], fuel_is_combusted=True)
 
@@ -276,11 +313,11 @@ def record_to_activity(rec: ThetisRecord, year: int, dwt: float,
             (VoyageScope.EXTRA_EEA, extra, "voyages to/from EEA"),
             (VoyageScope.AT_BERTH_EEA, berth, "at berth in EEA"),
             (VoyageScope.OUT_OF_SCOPE, out_of_scope, "outside EEA scope")):
-        if co2_t <= 0:
+        if co2_t <= 1e-6:
             continue
         dist = 0.0 if scope == VoyageScope.AT_BERTH_EEA else (total_dist * co2_t / sea_co2 if sea_co2 else 0.0)
         legs.append(VoyageLeg(scope, dist,
-                              [FuelConsumption(fuel, co2_t / cf)],
+                              fuels(co2_t),
                               f"THETIS-MRV {label} (ESTIMATE, {tag})"))
     return AnnualActivity(vessel, year, legs, ets_calibration=ets_calibration(rec),
                           fuel_is_combusted=True)

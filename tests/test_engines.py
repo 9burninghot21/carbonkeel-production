@@ -608,6 +608,7 @@ def test_cii_calculator():
 def test_public_data_fuel_assumption():
     print("Public-data fuel assumption (surplus side must be visible):")
     from ghgcore.thetis import ThetisRecord, assumed_fuel, record_to_activity
+    from ghgcore.cii import CF_TCO2_PER_T as CF
     # An all-HFO assumption puts every ship above every FuelEU target, which
     # would hide the surplus side of the pooling market entirely.
     bulk = ThetisRecord("1", "BULKER", ShipType.BULK_CARRIER, "Bulk carrier",
@@ -622,7 +623,19 @@ def test_public_data_fuel_assumption():
     act = record_to_activity(lng, year=2025, dwt=1.0)
     tonnes = act.total_fuel_by_type()[FuelType.LNG]
     check("LNG mass uses CF 2.750", tonnes, 10_000 / 2.750, tol=0.001)
-    check_eq("assumption disclosed in the leg", "assumed LNG" in act.legs[0].description, True)
+    check_eq("fuel basis disclosed in the leg", "LNG" in act.legs[0].description, True)
+    from ghgcore.thetis import inferred_mix
+    mgo = ThetisRecord("3", "REEFER", ShipType.REFRIGERATED_CARGO, "Refrigerated cargo carrier",
+                       co2_tonnes=742.90394, fuel_tonnes=231.723, est_distance_nm=1900)
+    check_eq("CO2/fuel = 3.206 reads as gas oil", inferred_mix(mgo)[0], [(FuelType.MDO_MGO, 1.0)])
+    blend = ThetisRecord("4", "BLEND", ShipType.BULK_CARRIER, "Bulk carrier",
+                         co2_tonnes=13829.15234, fuel_tonnes=4426.558, est_distance_nm=32515)
+    (f1, x1), (f2, x2) = inferred_mix(blend)[0]
+    # (3.12414 - 3.114) / (3.206 - 3.114) = 0.1102 gas oil by mass
+    check("blend: gas-oil share", x2, 0.1102, tol=0.002)
+    a2 = record_to_activity(blend, year=2025, dwt=1.0)
+    check("blend reproduces the register's fuel total", sum(a2.total_fuel_by_type().values()), 4426.558, tol=1e-6)
+    check("blend reproduces the register's CO2", sum(t * CF[f] for f, t in a2.total_fuel_by_type().items()), 13829.15234, tol=1e-6)
     # and the result must be able to come out positive
     r = compute_fueleu(act)
     check_eq("LNG carrier can show surplus", r.compliance_balance_tco2e > 0, True)

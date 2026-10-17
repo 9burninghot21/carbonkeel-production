@@ -1271,7 +1271,7 @@ function lagNote(d) {
   const y = d.bill.year;
   return `<div class="banner warn" style="font-size:13.5px"><b>This is ${y}, seen from the public record.</b>
     EMSA publishes verified emissions once a year, months after the year ends, so these figures describe ${y} voyages
-    and assume heavy fuel oil. This year&rsquo;s position also depends on this year&rsquo;s rules, fuel and routes.
+    with a fuel mix inferred from the register&rsquo;s fuel total. This year&rsquo;s position also depends on this year&rsquo;s rules, fuel and routes.
     <a class="inl" style="cursor:pointer" onclick="showTab('cii')">Work it out from your own figures</a> or
     <a class="inl" data-ck="cta_latest" href="mailto:enquiry@carbonkeel.com?subject=${encodeURIComponent('Current-year carbon position — ' + shipName(d))}">ask us for this year&rsquo;s analysis</a>.</div>`;
 }

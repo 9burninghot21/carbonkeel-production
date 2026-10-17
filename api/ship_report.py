@@ -152,7 +152,7 @@ def sections(r: dict) -> list[tuple[str, list[tuple[str, str]]]]:
                                 ("UK allowance price", f"GBP {a['uka_price_gbp']:,.2f} per tonne"),
                                 ("Pounds to euros", str(a["eur_per_gbp"])),
                                 ("FuelEU pool price", f"EUR {a['pool_price_eur_per_tco2e']:,.2f} per tCO2e"),
-                                ("Fuel mix", "Not published: heavy fuel oil assumed (LNG for LNG carriers)"),
+                                ("Fuel mix", r.get("fuel_mix") or "Inferred from the register's CO2 ÷ fuel"),
                                 ("Distance", "Worked out from the filed CO2 per nautical mile"),
                                 ("Market levels last checked", a["checked"])]))
     return out

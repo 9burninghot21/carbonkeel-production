@@ -248,7 +248,7 @@ def ship_result(rec, *, dwt=None, year=None, biofuel_pct=0.0, speed_pct=0.0, spe
                 fueleu_basis="penalty") -> dict:
     """Everything the lookup, the printable report and the CSV show for one ship."""
     from ghgcore.ets_rules import ETSExceptions
-    from ghgcore.thetis import rebuilt_ets_co2
+    from ghgcore.thetis import inferred_mix, rebuilt_ets_co2
     from ghgcore.ets_combined import compute_ets_combined
     y = year or rec.reporting_period or 2025
     eu_exc = ETSExceptions(ice_class, derogation_pct / 100.0)
@@ -264,7 +264,7 @@ def ship_result(rec, *, dwt=None, year=None, biofuel_pct=0.0, speed_pct=0.0, spe
 
     out = {"estimate": True, "scenario": scenario, "source": _EXPORT_NAME, "verified": verified,
            "scope_split": _scope_rows(rec), "assumptions": assumptions_block(eua, uka, fx, pool),
-           "company": rec.company, "ship_type": rec.ship_type_raw}
+           "company": rec.company, "ship_type": rec.ship_type_raw, "fuel_mix": inferred_mix(rec)[1]}
     if dwt:
         sc = build_scorecard(transform(record_to_activity(rec, year=y, dwt=dwt)), eua_price=eua,
                              uka_price_gbp=uka, eur_per_gbp=fx, eu_exceptions=eu_exc,

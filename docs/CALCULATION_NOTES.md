@@ -3,7 +3,7 @@
 Every number CarbonKeel shows comes from one of seven deterministic engines.
 This document states each engine's formula, parameters (with source), and a
 worked example you can recompute on a calculator. The same examples run as
-assertions in `tests/test_engines.py` (237 checks) — if you change a table,
+assertions in `tests/test_engines.py` (241 checks) — if you change a table,
 the tests force the hand-computation to be redone.
 
 ## 1. CII (MARPOL Annex VI Reg. 28 — `cii.py`)
@@ -33,7 +33,9 @@ rating       = A/B/C/D/E via attained/required vs dd vector        [G4]
 
 **Known estimate-path caveats** (public-data lookup only): distance is backed out of
 "CO₂ per distance" in the MRV filing; DWT/GT is user-supplied; fuel mix is
-assumed HFO-equivalent. Owner data removes all three.
+inferred from the register's CO₂ ÷ total fuel (3.114 heavy fuel oil, 3.151 light fuel oil,
+3.206 gas oil, 2.750 LNG; a ratio between two is read as a blend of them by mass, which
+reproduces both published totals). Owner data removes all three.
 
 ## 1b. CII corrections and voyage adjustments (MEPC.355(78), G5 — `g5.py`)
 
