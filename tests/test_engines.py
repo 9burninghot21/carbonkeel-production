@@ -495,6 +495,8 @@ def test_register_calibration():
     z = compute_ets(record_to_activity(zero, year=2025, dwt=1.0))
     check("reported zero => no cost", z.cost_eur, 0.0, tol=0)
     check_eq("calibration is zero", ets_calibration(zero), 0.0)
+    # the register's distance is the whole year's; berth time must not shorten it
+    check("CII distance = the register's total distance", act.total_distance_nm, r.est_distance_nm, tol=1e-9)
 
 
 def test_deadlines_and_agreement():

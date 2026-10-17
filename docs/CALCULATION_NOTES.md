@@ -3,7 +3,7 @@
 Every number CarbonKeel shows comes from one of seven deterministic engines.
 This document states each engine's formula, parameters (with source), and a
 worked example you can recompute on a calculator. The same examples run as
-assertions in `tests/test_engines.py` (225 checks) — if you change a table,
+assertions in `tests/test_engines.py` (226 checks) — if you change a table,
 the tests force the hand-computation to be redone.
 
 ## 1. CII (MARPOL Annex VI Reg. 28 — `cii.py`)

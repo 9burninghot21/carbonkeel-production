@@ -268,6 +268,9 @@ def record_to_activity(rec: ThetisRecord, year: int, dwt: float,
     out_of_scope = max(0.0, total_co2 - intra - extra - berth)
 
     legs: list[VoyageLeg] = []
+    # The register's distance (total CO2 / CO2 per mile) is the whole year's distance. Berth
+    # time burns fuel without sailing, so all of it goes to the sea legs, by their CO2 share.
+    sea_co2 = intra + extra + out_of_scope
     for scope, co2_t, label in (
             (VoyageScope.INTRA_EEA, intra, "intra-EEA voyages"),
             (VoyageScope.EXTRA_EEA, extra, "voyages to/from EEA"),
@@ -275,9 +278,7 @@ def record_to_activity(rec: ThetisRecord, year: int, dwt: float,
             (VoyageScope.OUT_OF_SCOPE, out_of_scope, "outside EEA scope")):
         if co2_t <= 0:
             continue
-        share = co2_t / total_co2 if total_co2 else 0.0
-        # berth burns fuel without distance; sea legs split distance by CO2 share
-        dist = 0.0 if scope == VoyageScope.AT_BERTH_EEA else total_dist * share
+        dist = 0.0 if scope == VoyageScope.AT_BERTH_EEA else (total_dist * co2_t / sea_co2 if sea_co2 else 0.0)
         legs.append(VoyageLeg(scope, dist,
                               [FuelConsumption(fuel, co2_t / cf)],
                               f"THETIS-MRV {label} (ESTIMATE, {tag})"))
